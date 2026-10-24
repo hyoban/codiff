@@ -48,6 +48,7 @@ import {
   useDocumentAppearance,
 } from './app/hooks/useDocumentAppearance.ts';
 import { useInitialWindowReveal } from './app/hooks/useInitialWindowReveal.ts';
+import { useRepositoryAutoRefresh } from './app/hooks/useRepositoryAutoRefresh.ts';
 import { useResizableSidebar } from './app/hooks/useResizableSidebar.ts';
 import { useReviewFileState } from './app/hooks/useReviewState.ts';
 import { createDefaultConfig } from './config/defaults.ts';
@@ -871,14 +872,6 @@ export default function App({
     startWalkthroughLoading,
   ]);
 
-  useEffect(
-    () =>
-      window.codiff.onRepositoryChanged(() => {
-        setLocalChangesDetected(true);
-      }),
-    [],
-  );
-
   useEffect(() => {
     let canceled = false;
 
@@ -1368,7 +1361,7 @@ export default function App({
   const refreshRepository = useCallback(() => {
     const previousState = stateRef.current;
     if (!previousState || pendingSource) {
-      return;
+      return Promise.resolve();
     }
 
     const request = sourceRequestRef.current + 1;
@@ -1378,7 +1371,7 @@ export default function App({
       ? getRefreshSource(historySourceRef.current)
       : undefined;
 
-    Promise.all([
+    return Promise.all([
       window.codiff.getRepositoryState(refreshSource),
       window.codiff.getRepositoryHistory(historyLimit, refreshHistorySource),
     ])
@@ -1428,7 +1421,10 @@ export default function App({
         setLocalChangesDetected(false);
       })
       .catch(() => {
-        // Keep the current state; the banner stays up as a retry affordance.
+        // Keep the current state and offer a retry if automatic refresh fails.
+        if (sourceRequestRef.current === request) {
+          setLocalChangesDetected(true);
+        }
       });
   }, [
     bumpItemVersion,
@@ -1440,6 +1436,12 @@ export default function App({
     setMainMode,
     setSelectedPath,
   ]);
+
+  useRepositoryAutoRefresh(
+    !pendingSource &&
+      (state?.source.type === 'working-tree' || state?.source.type === 'branch-working-tree'),
+    refreshRepository,
+  );
 
   // ⌘R / the View menu's "Refresh Changes" item route here from the main
   // process instead of reloading the window.

@@ -2958,7 +2958,7 @@ test('a walkthrough file that no longer anchors surfaces a dismissible banner', 
   expect(container.querySelector('.walkthrough-outdated-banner.visible')).toBeNull();
 });
 
-test('repository changes show the update banner without refreshing the working tree', async () => {
+test('repository changes automatically refresh the working tree', async () => {
   let onRepositoryChanged: ((change: { root: string }) => void) | null = null;
   const getRepositoryState = vi.fn(async () => repositoryState);
 
@@ -2998,8 +2998,55 @@ test('repository changes show the update banner without refreshing the working t
     onRepositoryChanged?.({ root: '/repo' });
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(container.querySelector('.repository-change-banner.visible')).not.toBeNull();
-  expect(getRepositoryState).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('.repository-change-banner.visible')).toBeNull();
+  expect(getRepositoryState).toHaveBeenCalledTimes(2);
+});
+
+test('failed automatic refresh offers a manual retry without looping', async () => {
+  let notify: () => void = vi.fn();
+  const getRepositoryState = vi
+    .fn(async () => repositoryState)
+    .mockResolvedValueOnce(repositoryState)
+    .mockRejectedValueOnce(new Error('Repository is temporarily unavailable'));
+  window.codiff = createCodiffMock({
+    getRepositoryState,
+    onRepositoryChanged: vi.fn((callback) => {
+      notify = () => callback({ root: '/repo' });
+      return () => {};
+    }),
+  });
+  await using view = await renderReact(<App />);
+  await act(async () => notify());
+  await waitFor(() => {
+    expect(view.container.querySelector('.repository-change-banner.visible')).not.toBeNull();
+  });
+  expect(getRepositoryState).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    view.container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
+  });
+  expect(getRepositoryState).toHaveBeenCalledTimes(3);
+  expect(view.container.querySelector('.repository-change-banner.visible')).toBeNull();
+});
+
+test.each([
+  { ref: 'abc1234', type: 'commit' },
+  { baseRef: 'main', headRef: 'feature', ref: 'feature', type: 'branch-working-tree' },
+] satisfies Array<ReviewSource>)('local changes respect the $type source', async (source) => {
+  let notify: () => void = vi.fn();
+  const getRepositoryState = vi.fn(async () => ({ ...repositoryState, source }));
+  window.codiff = createCodiffMock({
+    getRepositoryState,
+    onRepositoryChanged: vi.fn((callback) => {
+      notify = () => callback({ root: '/repo' });
+      return () => {};
+    }),
+  });
+  await using _view = await renderReact(<App />);
+  await act(async () => notify());
+  expect(getRepositoryState).toHaveBeenCalledTimes(source.type === 'commit' ? 1 : 2);
+  if (source.type === 'branch-working-tree') {
+    expect(getRepositoryState).toHaveBeenLastCalledWith({ ref: 'feature', type: source.type });
+  }
 });
 
 test('Done accepts the edited diff without fetching the full working-tree section again', async () => {
@@ -3085,7 +3132,7 @@ test('Done accepts the edited diff without fetching the full working-tree sectio
   );
 });
 
-test('clicking the change banner refreshes the repository in place', async () => {
+test('automatic refresh updates changed files in place', async () => {
   const initialFile = {
     fingerprint: 'src/app.ts:1',
     path: 'src/app.ts',
@@ -3172,12 +3219,6 @@ test('clicking the change banner refreshes the repository in place', async () =>
   expect(container.textContent).not.toContain('added.ts');
   await act(async () => {
     onRepositoryChanged?.({ root: '/repo' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  const refreshButton = container.querySelector<HTMLButtonElement>('.repository-change-reload');
-  expect(refreshButton).not.toBeNull();
-  await act(async () => {
-    refreshButton?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   // New file appears without a window reload, and the banner clears.
@@ -3279,10 +3320,6 @@ test('refreshing all changes re-resolves the branch snapshot', async () => {
     onRepositoryChanged?.({ root: '/repo' });
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
   await waitFor(() => {
     expect(container.textContent).toContain('added.ts');
   });
@@ -3368,12 +3405,6 @@ test('refreshing changed viewed files expands them in place', async () => {
   });
   await act(async () => {
     onRepositoryChanged?.({ root: '/repo' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  const refreshButton = container.querySelector<HTMLButtonElement>('.repository-change-reload');
-  expect(refreshButton).not.toBeNull();
-  await act(async () => {
-    refreshButton?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await waitFor(() => {
@@ -3484,10 +3515,6 @@ test('refreshing changed files automatically regenerates the walkthrough', async
     onRepositoryChanged?.({ root: '/repo' });
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
   await waitFor(() => {
     expect(getNarrativeWalkthrough).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain('Review the added file.');
@@ -3501,10 +3528,6 @@ test('refreshing changed files automatically regenerates the walkthrough', async
   });
   await act(async () => {
     onRepositoryChanged?.({ root: '/repo' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await waitFor(() => {
@@ -3613,10 +3636,6 @@ test('drops automatic walkthrough regeneration when the same source refreshes ag
   const refresh = async () => {
     await act(async () => {
       onRepositoryChanged?.({ root: '/repo' });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
   };
@@ -3747,10 +3766,6 @@ test('committing and then editing again clears and regenerates the walkthrough',
     onRepositoryChanged?.({ root: '/repo' });
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
   await waitFor(() => {
     expect(container.textContent).toContain('No local changes');
     expect(container.querySelector('.wt-stop-block')).toBeNull();
@@ -3758,10 +3773,6 @@ test('committing and then editing again clears and regenerates the walkthrough',
   expect(getNarrativeWalkthrough).toHaveBeenCalledTimes(1);
   await act(async () => {
     onRepositoryChanged?.({ root: '/repo' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  await act(async () => {
-    container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await waitFor(() => {

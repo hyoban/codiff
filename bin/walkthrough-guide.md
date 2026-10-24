@@ -5,6 +5,10 @@ through a change, with ordered chapters, stops, and deterministic hunk ids from 
 diff. The diff content itself is not embedded. Codiff computes the diff from the repository,
 resolves hunk ids on load, and renders the real current diff.
 
+Working-tree and branch-with-working-tree reviews automatically refresh when local
+changes are detected. If those changes affect the files in an active walkthrough,
+Codiff regenerates the walkthrough against the updated diff.
+
 Write the JSON document to a **temporary file outside the repository** and pass it to
 Codiff with `--walkthrough-file`.
 
