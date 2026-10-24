@@ -82,22 +82,26 @@ function ResizableSidebarHarness({
   collapseThreshold,
   onCollapse,
   onWidthCommit,
+  panelSelector,
   position,
 }: {
   collapseThreshold?: number;
   onCollapse?: () => void;
   onWidthCommit: (width: number) => void;
+  panelSelector?: string;
   position: 'left' | 'right';
 }) {
   const { resizeSidebar, sidebarWidth } = useResizableSidebar({
     collapseThreshold,
     onCollapse,
     onWidthCommit,
+    panelSelector,
     position,
     readWidth: () => 292,
   });
   return (
     <div data-testid="shell">
+      <aside className="files-sidebar" />
       <div data-testid="handle" data-width={sidebarWidth} onPointerDown={resizeSidebar} />
     </div>
   );
@@ -177,5 +181,32 @@ test.each([
     expect(onWidthCommit).not.toHaveBeenCalled();
     expect(handle.dataset.width).toBe('292');
     expect(handle.classList.contains('dragging')).toBe(false);
+  },
+);
+
+test.each([
+  { clientX: 622, position: 'left' },
+  { clientX: 218, position: 'right' },
+] as const)(
+  '$position file panel resizing excludes the adjacent history column',
+  async ({ clientX, position }) => {
+    const onWidthCommit = vi.fn();
+    await using view = await renderReact(
+      <ResizableSidebarHarness
+        onWidthCommit={onWidthCommit}
+        panelSelector=".files-sidebar"
+        position={position}
+      />,
+    );
+    const handle = prepareResizeHandle(view.container);
+    const panel = view.container.querySelector<HTMLElement>('.files-sidebar')!;
+    panel.getBoundingClientRect = () => ({ left: 272, right: 568 }) as DOMRect;
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+      handle.dispatchEvent(new MouseEvent('pointermove', { clientX }));
+      handle.dispatchEvent(new MouseEvent('pointerup'));
+    });
+    expect(handle.dataset.width).toBe('350');
+    expect(onWidthCommit).toHaveBeenCalledWith(350);
   },
 );

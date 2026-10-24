@@ -1,4 +1,5 @@
 const SIDEBAR_WIDTH_STORAGE_KEY = 'codiff:sidebar-width';
+const HISTORY_WIDTH_STORAGE_KEY = 'codiff:history-width';
 
 export const SIDEBAR_COLLAPSE_THRESHOLD = 80;
 export const SIDEBAR_DEFAULT_WIDTH = 292;
@@ -22,4 +23,14 @@ export const readSidebarWidth = (storage: SidebarWidthStorage = localStorage): n
 
 export const writeSidebarWidth = (width: number, storage: SidebarWidthStorage = localStorage) => {
   storage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clampSidebarWidth(width)));
+};
+
+export const readHistoryWidth = (storage: SidebarWidthStorage = localStorage): number => {
+  const raw = storage.getItem(HISTORY_WIDTH_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) ? clampSidebarWidth(parsed) : 252;
+};
+
+export const writeHistoryWidth = (width: number, storage: SidebarWidthStorage = localStorage) => {
+  storage.setItem(HISTORY_WIDTH_STORAGE_KEY, String(clampSidebarWidth(width)));
 };

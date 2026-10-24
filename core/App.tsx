@@ -1,8 +1,6 @@
 import { ArrowSquareOutIcon as ArrowSquareOut } from '@phosphor-icons/react/ArrowSquareOut';
-import { ClockCounterClockwiseIcon as ClockCounterClockwise } from '@phosphor-icons/react/ClockCounterClockwise';
-import { TreeStructureIcon as TreeStructure } from '@phosphor-icons/react/TreeStructure';
 import type { FileDiffLoadedFiles } from '@pierre/diffs';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandBar } from './app/components/CommandBar.tsx';
 import { CommitView } from './app/components/CommitView.tsx';
 import { KeyboardShortcutsHelp } from './app/components/KeyboardShortcutsHelp.tsx';
@@ -19,7 +17,6 @@ import {
   ReviewSourceLoading,
 } from './app/components/Panels.tsx';
 import { preloadReviewMarkdown, ReviewCodeView } from './app/components/ReviewCodeView.tsx';
-import type { ReviewModeItem } from './app/components/ReviewModeControl.tsx';
 import { ReviewTopBar } from './app/components/ReviewTopBar.tsx';
 import { Sidebar } from './app/components/Sidebar.tsx';
 import { useAppCommands } from './app/hooks/useAppCommands.ts';
@@ -79,7 +76,9 @@ import {
 import { getSelectedPathFromScroll } from './lib/review-scroll.ts';
 import {
   SIDEBAR_COLLAPSE_THRESHOLD,
+  readHistoryWidth,
   readSidebarWidth,
+  writeHistoryWidth,
   writeSidebarWidth,
 } from './lib/sidebar-width.ts';
 import {
@@ -90,7 +89,6 @@ import {
   getRepositoryLoadError,
   getSourceKey,
   getSourceLabel,
-  shouldStartInHistoryWhenEmpty,
   supportsDiffSearchContentPreload,
   supportsLazyDiffContent,
   usesViewedFileState,
@@ -292,11 +290,17 @@ export default function App({
     collapseThreshold: SIDEBAR_COLLAPSE_THRESHOLD,
     onCollapse: collapseSidebar,
     onWidthCommit: writeSidebarWidth,
+    panelSelector: '.files-sidebar',
     position: preferences.sidebarPosition,
     readWidth: readSidebarWidth,
   });
+  const { resizeSidebar: resizeHistory, sidebarWidth: historyWidth } = useResizableSidebar({
+    onWidthCommit: writeHistoryWidth,
+    panelSelector: '.history-sidebar',
+    position: preferences.sidebarPosition,
+    readWidth: readHistoryWidth,
+  });
   const {
-    changeSidebarMode,
     closeCommitView,
     commitChanges,
     commitDraft,
@@ -304,9 +308,7 @@ export default function App({
     mainModeRef,
     openCommitView,
     setMainMode,
-    setSidebarMode,
     showCommitView,
-    sidebarMode,
     subscribeToCommitOutput,
   } = useAppReview({ state, stateRef });
   const [hunkNavigation, setHunkNavigation] = useState<{
@@ -666,11 +668,6 @@ export default function App({
 
       const reloadSelectedPath = getReloadSelectionPath(reloadSelection, orderedState);
       const nextReloadDeltaPaths = getReloadDeltaPaths(reloadSelection, orderedState);
-      setSidebarMode(
-        shouldStartInHistoryWhenEmpty(orderedState.source) && orderedState.files.length === 0
-          ? 'history'
-          : 'tree',
-      );
       const nextViewed = usesViewedFileState(orderedState.source)
         ? readViewed(orderedState.root)
         : {};
@@ -679,7 +676,6 @@ export default function App({
         orderedState.source.type === 'working-tree' &&
         orderedState.files.length > 0;
       if (restoreCommitView) {
-        setSidebarMode('tree');
         setMainMode('commit');
       }
 
@@ -729,7 +725,6 @@ export default function App({
 
     setReviewComments,
     setSelectedPath,
-    setSidebarMode,
     setViewed,
   ]);
 
@@ -1091,7 +1086,7 @@ export default function App({
   const focusFileFilter = useCallback(() => {
     expandSidebar();
     requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('.sidebar-search');
+      const input = document.querySelector<HTMLInputElement>('.files-sidebar .sidebar-search');
       input?.focus();
       input?.select();
     });
@@ -1408,6 +1403,21 @@ export default function App({
     [showOpenReviewSourceDialog],
   );
 
+  const changeSidebarMode = useCallback(
+    (panel: 'tree' | 'history') => {
+      setSidebarCollapsed(false);
+      setMainMode('review');
+      requestAnimationFrame(() => {
+        const input = document.querySelector<HTMLInputElement>(
+          panel === 'tree' ? '.files-sidebar .sidebar-search' : '.history-sidebar .sidebar-search',
+        );
+        input?.focus();
+        input?.select();
+      });
+    },
+    [setMainMode],
+  );
+
   const commandBarCommands = useAppCommands({
     changeSidebarMode,
     focusFileFilter,
@@ -1624,22 +1634,10 @@ export default function App({
     viewed,
     wordWrap,
   };
-  const reviewModes = [
-    {
-      icon: <TreeStructure aria-hidden size={14} weight="bold" />,
-      label: 'Tree',
-      value: 'tree',
-    },
-    {
-      icon: <ClockCounterClockwise aria-hidden size={14} weight="bold" />,
-      label: 'History',
-      value: 'history',
-    },
-  ] satisfies ReadonlyArray<ReviewModeItem<typeof sidebarMode>>;
 
   return (
     <div
-      className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}${
+      className={`app-shell three-column${sidebarCollapsed ? ' sidebar-collapsed' : ''}${
         commandBarVisible ? ' command-bar-open' : ''
       }${isWindowFullScreen ? ' window-fullscreen' : ''}`}
       data-sidebar-position={preferences.sidebarPosition}
@@ -1649,8 +1647,8 @@ export default function App({
           : {
               gridTemplateColumns:
                 preferences.sidebarPosition === 'right'
-                  ? `minmax(0, 1fr) 0 ${sidebarWidth}px`
-                  : `${sidebarWidth}px 0 minmax(0, 1fr)`,
+                  ? `minmax(0, 1fr) 0 min(${sidebarWidth}px, 30vw) 0 min(${historyWidth}px, 30vw)`
+                  : `min(${historyWidth}px, 30vw) 0 min(${sidebarWidth}px, 30vw) 0 minmax(0, 1fr)`,
             }
       }
     >
@@ -1690,9 +1688,6 @@ export default function App({
             ) : null}
           </>
         }
-        mode={sidebarMode}
-        modes={reviewModes}
-        onModeChange={changeSidebarMode}
         onToggleSidebar={toggleSidebar}
         repository={
           <span className="review-top-bar-repository review-top-bar-repository-path">
@@ -1748,51 +1743,60 @@ export default function App({
         />
       ) : null}
       <KeyboardShortcutsHelp keymap={codiffConfig.keymap} visible={shortcutsHelpVisible} />
-      <aside className="squircle sidebar">
-        <Sidebar
-          branchSource={
-            historySource?.type === 'branch-diff'
-              ? historySource
-              : historySource?.type === 'branch-working-tree' &&
-                  historySource.baseRef &&
-                  historySource.headRef
-                ? {
-                    baseRef: historySource.baseRef,
-                    headRef: historySource.headRef,
-                    ref: historySource.ref,
-                    type: 'branch-diff',
-                  }
-                : null
-          }
-          commitFiles={state.files}
-          commitViewOpen={showCommitView}
-          currentSource={pendingSource ?? state.source}
-          files={visibleFiles}
-          historyEntries={historyEntries}
-          historyHasMore={historyHasMore}
-          historyLoading={historyLoading}
-          keymap={codiffConfig.keymap}
-          mode={sidebarMode}
+      {(['history', 'tree'] as const).map((mode) => (
+        <Fragment key={mode}>
+          <aside
+            aria-label={mode === 'history' ? 'Commit history' : 'Changed files'}
+            className={`squircle sidebar ${mode === 'history' ? 'history' : 'files'}-sidebar`}
+          >
+            <Sidebar
+              branchSource={
+                historySource?.type === 'branch-diff'
+                  ? historySource
+                  : historySource?.type === 'branch-working-tree' &&
+                      historySource.baseRef &&
+                      historySource.headRef
+                    ? {
+                        baseRef: historySource.baseRef,
+                        headRef: historySource.headRef,
+                        ref: historySource.ref,
+                        type: 'branch-diff',
+                      }
+                    : null
+              }
+              commitFiles={state.files}
+              commitViewOpen={showCommitView}
+              currentSource={pendingSource ?? state.source}
+              files={visibleFiles}
+              historyEntries={historyEntries}
+              historyHasMore={historyHasMore}
+              historyLoading={historyLoading}
+              keymap={codiffConfig.keymap}
+              mode={mode}
 
-          onActivatePath={activatePath}
-          onLoadMoreHistory={loadMoreHistory}
-          onSearchQueryChange={
-            sidebarMode === 'history' ? setHistorySearchQuery : setFileSearchQuery
-          }
-          onSelectSource={selectSource}
+              onActivatePath={activatePath}
+              onLoadMoreHistory={loadMoreHistory}
+              onSearchQueryChange={mode === 'history' ? setHistorySearchQuery : setFileSearchQuery}
+              onSelectSource={selectSource}
 
-          onToggleCommitView={showCommitView ? closeCommitView : openCommitView}
-          pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
-          reloadDeltaPaths={reloadDeltaPaths}
-          searchQuery={sidebarMode === 'history' ? historySearchQuery : fileSearchQuery}
-          selectedPath={visibleSelectedPath}
+              onToggleCommitView={showCommitView ? closeCommitView : openCommitView}
+              pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
+              reloadDeltaPaths={reloadDeltaPaths}
+              searchQuery={mode === 'history' ? historySearchQuery : fileSearchQuery}
+              selectedPath={visibleSelectedPath}
 
-          showWhitespace={showWhitespace}
-          summaryLoading={isSwitchingSource}
-          viewed={viewed}
-        />
-      </aside>
-      <div aria-hidden className="sidebar-resizer" onPointerDown={resizeSidebar} />
+              showWhitespace={showWhitespace}
+              summaryLoading={isSwitchingSource}
+              viewed={viewed}
+            />
+          </aside>
+          <div
+            aria-hidden
+            className={`sidebar-resizer ${mode === 'history' ? 'history' : 'files'}-resizer`}
+            onPointerDown={mode === 'history' ? resizeHistory : resizeSidebar}
+          />
+        </Fragment>
+      ))}
       <main className="review">
         {isSwitchingSource ? (
           <ReviewSourceLoading />

@@ -5,6 +5,7 @@ type UseResizableSidebarOptions = {
   collapseThreshold?: number;
   onCollapse?: () => void;
   onWidthCommit: (width: number) => void;
+  panelSelector?: string;
   position: 'left' | 'right';
   readWidth: () => number;
 };
@@ -13,6 +14,7 @@ export function useResizableSidebar({
   collapseThreshold,
   onCollapse,
   onWidthCommit,
+  panelSelector,
   position,
   readWidth,
 }: UseResizableSidebarOptions) {
@@ -32,7 +34,11 @@ export function useResizableSidebar({
         return;
       }
 
-      const shellRect = shell.getBoundingClientRect();
+      const panel = panelSelector ? shell.querySelector(panelSelector) : shell;
+      if (!panel) {
+        return;
+      }
+      const shellRect = panel.getBoundingClientRect();
       handle.setPointerCapture(event.pointerId);
       handle.classList.add('dragging');
       document.body.style.cursor = 'col-resize';
@@ -75,7 +81,7 @@ export function useResizableSidebar({
       handle.addEventListener('pointerup', handleEnd);
       handle.addEventListener('pointercancel', handleEnd);
     },
-    [collapseThreshold, onCollapse, onWidthCommit, position],
+    [collapseThreshold, onCollapse, onWidthCommit, panelSelector, position],
   );
 
   return { resizeSidebar, sidebarWidth };

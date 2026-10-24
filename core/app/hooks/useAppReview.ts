@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import type { SidebarMode } from '../../lib/app-types.ts';
 import { buildCommitModel } from '../../lib/commit.ts';
 import { getSourceKey } from '../../lib/source.ts';
 import type { RepositoryState, CommitRequest } from '../../types.ts';
@@ -12,7 +11,6 @@ export function useAppReview({
   stateRef: RefObject<RepositoryState | null>;
 }) {
   const [mainMode, setMainMode] = useState<'commit' | 'review'>('review');
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('tree');
   const mainModeRef = useRef(mainMode);
   useEffect(() => {
     mainModeRef.current = mainMode;
@@ -57,19 +55,13 @@ export function useAppReview({
     (path: string) => toggleCommitGroup([path]),
     [toggleCommitGroup],
   );
-  const changeSidebarMode = useCallback((mode: SidebarMode) => {
-    setMainMode('review');
-    setSidebarMode(mode);
-  }, []);
   const openCommitView = useCallback(() => {
     if (stateRef.current?.source.type !== 'working-tree' || !stateRef.current.files.length) {
       return;
     }
-    setSidebarMode('tree');
     setMainMode('commit');
   }, [stateRef]);
   const closeCommitView = useCallback(() => {
-    setSidebarMode('tree');
     setMainMode('review');
   }, []);
   const commitChanges = useCallback(
@@ -85,7 +77,6 @@ export function useAppReview({
     [],
   );
   return {
-    changeSidebarMode,
     closeCommitView,
     commitChanges,
     commitDraft: {
@@ -101,10 +92,8 @@ export function useAppReview({
     mainModeRef,
     openCommitView,
     setMainMode,
-    setSidebarMode,
     showCommitView:
       mainMode === 'commit' && state?.source.type === 'working-tree' && state.files.length > 0,
-    sidebarMode,
     subscribeToCommitOutput,
   };
 }

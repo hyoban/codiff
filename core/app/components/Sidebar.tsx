@@ -71,6 +71,9 @@ export function Sidebar({
     commitFiles.length > 0;
 
   useEffect(() => {
+    if (mode !== 'tree') {
+      return;
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isNativeInputTarget(event.target) && matchesShortcut(event, keymap, 'fileFilter')) {
         event.preventDefault();
@@ -81,13 +84,14 @@ export function Sidebar({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [keymap]);
+  }, [keymap, mode]);
 
   return (
     <>
+      <div className="sidebar-panel-title">{mode === 'history' ? 'History' : 'Files'}</div>
       <div className="sidebar-search-row">
         <input
-          aria-label="Filter changed files"
+          aria-label={mode === 'history' ? 'Filter history' : 'Filter changed files'}
           className="sidebar-search"
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
           placeholder={mode === 'history' ? 'Filter history' : 'Filter files'}
@@ -120,22 +124,20 @@ export function Sidebar({
           viewed={viewed}
         />
       )}
-      <DiffSummaryFooter
-        files={mode === 'history' ? commitFiles : files}
-        loading={summaryLoading}
-        showWhitespace={showWhitespace}
-      >
-        {showCommitButton ? (
-          <Button
-            aria-label={commitViewOpen ? 'Show file tree' : 'Open commit view'}
-            className="sidebar-commit-button"
-            onClick={onToggleCommitView}
-            type="button"
-          >
-            {commitViewOpen ? 'Tree' : 'Commit'}
-          </Button>
-        ) : null}
-      </DiffSummaryFooter>
+      {mode === 'tree' ? (
+        <DiffSummaryFooter files={files} loading={summaryLoading} showWhitespace={showWhitespace}>
+          {showCommitButton ? (
+            <Button
+              aria-label={commitViewOpen ? 'Show file tree' : 'Open commit view'}
+              className="sidebar-commit-button"
+              onClick={onToggleCommitView}
+              type="button"
+            >
+              {commitViewOpen ? 'Tree' : 'Commit'}
+            </Button>
+          ) : null}
+        </DiffSummaryFooter>
+      ) : null}
     </>
   );
 }
@@ -253,18 +255,6 @@ function HistorySidebar({
               author: null,
               committedAt: null,
               gravatarUrl: undefined,
-              key: 'working-tree',
-              kind: 'entry' as const,
-              ref: '',
-              source: { type: 'working-tree' } satisfies ReviewSource,
-              subject: 'Uncommitted changes',
-            }
-          : null,
-        !normalizedQuery
-          ? {
-              author: null,
-              committedAt: null,
-              gravatarUrl: undefined,
               key: getSourceKey({
                 baseRef: branchSource.baseRef,
                 headRef: branchSource.headRef,
@@ -306,21 +296,7 @@ function HistorySidebar({
     }
 
     const localRows = commitRows.filter(matchesQuery);
-    return [
-      !normalizedQuery
-        ? {
-            author: null,
-            committedAt: null,
-            gravatarUrl: undefined,
-            key: 'working-tree',
-            kind: 'entry' as const,
-            ref: '',
-            source: { type: 'working-tree' } satisfies ReviewSource,
-            subject: 'Uncommitted changes',
-          }
-        : null,
-      ...localRows,
-    ].filter((row): row is NonNullable<typeof row> => row != null);
+    return localRows;
   }, [branchSource, entries, normalizedQuery, pullRequestSource]);
   const maybeLoadMore = useCallback(() => {
     const element = listRef.current;
@@ -334,53 +310,68 @@ function HistorySidebar({
   }, [hasMore, loading, normalizedQuery, onLoadMore]);
 
   return (
-    <div className="history-list" onScroll={maybeLoadMore} ref={listRef}>
-      {rows.map((row) => {
-        if (row.kind === 'section') {
-          return (
-            <div className="history-section" key={row.key}>
-              {row.label}
-            </div>
-          );
-        }
+    <>
+      <div className="history-local">
+        <button
+          aria-pressed={currentSource.type === 'working-tree'}
+          className={`history-entry${currentSource.type === 'working-tree' ? ' selected' : ''}`}
+          onClick={() => onSelectSource({ type: 'working-tree' })}
+          title="Uncommitted changes"
+          type="button"
+        >
+          <span className="history-entry-ref">Local</span>
+          <span className="history-entry-subject">Uncommitted changes</span>
+        </button>
+      </div>
+      <div className="history-list" onScroll={maybeLoadMore} ref={listRef}>
+        {rows.map((row) => {
+          if (row.kind === 'section') {
+            return (
+              <div className="history-section" key={row.key}>
+                {row.label}
+              </div>
+            );
+          }
 
-        const selected = row.key === currentSourceKey;
-        const hasMetadata = Boolean(row.author && row.committedAt);
-        return (
-          <button
-            className={`history-entry${selected ? ' selected' : ''}${hasMetadata ? ' with-metadata' : ''}`}
-            key={row.key}
-            onClick={() => onSelectSource(row.source)}
-            title={row.subject}
-            type="button"
-          >
-            <span className="history-entry-ref">
-              {row.source.type === 'commit'
-                ? getShortRef(row.source.ref)
-                : row.source.type === 'pull-request' ||
-                    row.source.type === 'branch-diff' ||
-                    row.source.type === 'branch-working-tree'
-                  ? row.ref
-                  : 'local'}
-            </span>
-            <span className="history-entry-subject">{row.subject}</span>
-            {hasMetadata ? (
-              <span className="history-entry-meta">
-                <span className="history-entry-author">
-                  <Avatar name={row.author || '?'} size="small" url={row.gravatarUrl} />
-                  <span>{row.author}</span>
-                </span>
-                <span>{shortDate(row.committedAt || 0)}</span>
+          const selected = row.key === currentSourceKey;
+          const hasMetadata = Boolean(row.author && row.committedAt);
+          return (
+            <button
+              aria-pressed={selected}
+              className={`history-entry${selected ? ' selected' : ''}${hasMetadata ? ' with-metadata' : ''}`}
+              key={row.key}
+              onClick={() => onSelectSource(row.source)}
+              title={row.subject}
+              type="button"
+            >
+              <span className="history-entry-ref">
+                {row.source.type === 'commit'
+                  ? getShortRef(row.source.ref)
+                  : row.source.type === 'pull-request' ||
+                      row.source.type === 'branch-diff' ||
+                      row.source.type === 'branch-working-tree'
+                    ? row.ref
+                    : 'local'}
               </span>
-            ) : null}
-          </button>
-        );
-      })}
-      {loading ? (
-        <div className="history-loading">
-          <span>Loading history…</span>
-        </div>
-      ) : null}
-    </div>
+              <span className="history-entry-subject">{row.subject}</span>
+              {hasMetadata ? (
+                <span className="history-entry-meta">
+                  <span className="history-entry-author">
+                    <Avatar name={row.author || '?'} size="small" url={row.gravatarUrl} />
+                    <span>{row.author}</span>
+                  </span>
+                  <span>{shortDate(row.committedAt || 0)}</span>
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+        {loading ? (
+          <div className="history-loading">
+            <span>Loading history…</span>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }

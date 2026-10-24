@@ -25,7 +25,9 @@ import {
   SIDEBAR_MIN_WIDTH,
   clampSidebarWidth,
   readSidebarWidth,
+  readHistoryWidth,
   writeSidebarWidth,
+  writeHistoryWidth,
 } from '../lib/sidebar-width.ts';
 import { getRepositoryLoadError } from '../lib/source.ts';
 import type { ChangedFile } from '../types.ts';
@@ -849,4 +851,19 @@ test('escape discards empty review comments without confirmation', () => {
 test('escape confirms before discarding review comments with text', () => {
   expect(shouldDiscardReviewCommentOnEscape('Needs work.', () => false)).toBe(false);
   expect(shouldDiscardReviewCommentOnEscape('Needs work.', () => true)).toBe(true);
+});
+
+test('history and file panels persist independent widths', () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+  };
+  expect(readHistoryWidth(storage)).toBe(252);
+  writeSidebarWidth(360, storage);
+  writeHistoryWidth(260, storage);
+  expect(readSidebarWidth(storage)).toBe(360);
+  expect(readHistoryWidth(storage)).toBe(260);
 });

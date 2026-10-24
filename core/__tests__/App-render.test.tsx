@@ -35,6 +35,7 @@ reactActEnvironment.ResizeObserver ??= class ResizeObserver {
 };
 HTMLElement.prototype.scrollBy ??= function scrollBy() {};
 HTMLElement.prototype.scrollTo ??= function scrollTo() {};
+HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 class StubWorker extends EventTarget {
   constructor(_scriptURL: string | URL, _options?: WorkerOptions) {
     super();
@@ -398,7 +399,9 @@ test('desktop app places the sidebar on the configured side', async () => {
   await waitFor(() => {
     const shell = app.container.querySelector<HTMLElement>('.app-shell');
     expect(shell?.dataset.sidebarPosition).toBe('right');
-    expect(shell?.style.gridTemplateColumns).toBe('minmax(0, 1fr) 0 292px');
+    expect(shell?.style.gridTemplateColumns).toBe(
+      'minmax(0, 1fr) 0 min(292px, 30vw) 0 min(252px, 30vw)',
+    );
   });
 });
 
@@ -434,15 +437,14 @@ test('stale persisted collapsed sidebar state does not hide the sidebar on launc
     expect(app.container.querySelector('.app-shell')?.classList.contains('sidebar-collapsed')).toBe(
       false,
     );
-    expect(app.container.querySelector('.sidebar')).not.toBeNull();
-    expect(app.container.querySelector('.review-top-bar [role="tablist"]')).not.toBeNull();
+    expect(app.container.querySelector('.history-sidebar')).not.toBeNull();
+    expect(app.container.querySelector('.files-sidebar')).not.toBeNull();
+    expect(app.container.querySelectorAll('.sidebar-resizer')).toHaveLength(2);
+    expect(app.container.querySelector('.review-top-bar [role="tablist"]')).toBeNull();
   });
 
   const topBar = app.container.querySelector('.review-top-bar');
   expect(app.container.querySelector('.sidebar [role="tablist"]')).toBeNull();
-  const modeControl = topBar?.querySelector('.review-mode-control');
-  const modes = modeControl?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [];
-  expect([...modes].map((mode) => mode.textContent)).toEqual(['Tree', 'History']);
   const sidebarToggle = topBar?.querySelector<HTMLButtonElement>('.sidebar-toggle-button');
   await act(async () => sidebarToggle?.click());
   expect(app.container.querySelector('.app-shell')?.classList.contains('sidebar-collapsed')).toBe(
@@ -677,7 +679,7 @@ test('sidebar commit button toggles back to tree when commit view is open', asyn
   container.remove();
 });
 
-test('history summarizes the selected commit independently of file and history filters', async () => {
+test('three columns keep Local accessible and update the file summary when switching commits', async () => {
   let resolveCommit: ((state: RepositoryState) => void) | undefined;
   const commitSource = { ref: 'aaa1111', type: 'commit' } satisfies ReviewSource;
   const emptySource = { ref: 'bbb2222', type: 'commit' } satisfies ReviewSource;
@@ -722,15 +724,22 @@ test('history summarizes the selected commit independently of file and history f
   await using app = await renderReact(<App />);
   const total = () => app.container.querySelector('.sidebar-total-line-count')?.textContent;
   await waitFor(() => expect(total()).toBe('+3-3'));
-  await setInputValue(app.container.querySelector<HTMLInputElement>('.sidebar-search')!, 'README');
-  await waitFor(() => expect(total()).toBe('+1-1'));
-  await act(async () =>
-    [...app.container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-      .find((button) => button.textContent === 'History')!
-      .click(),
+  await setInputValue(
+    app.container.querySelector<HTMLInputElement>('.files-sidebar .sidebar-search')!,
+    'README',
   );
-  await waitFor(() => expect(total()).toBe('+3-3'));
-  await setInputValue(app.container.querySelector<HTMLInputElement>('.sidebar-search')!, 'tests');
+  await waitFor(() => expect(total()).toBe('+1-1'));
+  await setInputValue(
+    app.container.querySelector<HTMLInputElement>('.history-sidebar .sidebar-search')!,
+    'tests',
+  );
+  expect(total()).toBe('+1-1');
+  expect(app.container.querySelector('.history-local .history-entry')).not.toBeNull();
+  expect(app.container.querySelector('.files-sidebar file-tree-container')).not.toBeNull();
+  await setInputValue(
+    app.container.querySelector<HTMLInputElement>('.files-sidebar .sidebar-search')!,
+    '',
+  );
   expect(total()).toBe('+3-3');
   const breakdown = app.container.querySelector('.sidebar-summary-breakdown');
   await act(async () =>
@@ -743,12 +752,20 @@ test('history summarizes the selected commit independently of file and history f
     resolveCommit!({ ...repositoryState, files: [files[1]], source: commitSource }),
   );
   await waitFor(() => expect(total()).toBe('+1-1'));
+  await waitFor(() => {
+    const tree = app.container.querySelector('.files-sidebar file-tree-container')?.shadowRoot;
+    expect(tree?.querySelector('[data-item-path="tests/app.ts"]')).not.toBeNull();
+    expect(tree?.querySelector('[data-item-path="README.md"]')).toBeNull();
+  });
   expect(
     [...app.container.querySelectorAll('.sidebar-summary-breakdown > div')].map(
       (row) => row.textContent,
     ),
   ).toEqual(['Prod+0-0', 'Tests+1-1', 'Other+0-0']);
-  await setInputValue(app.container.querySelector<HTMLInputElement>('.sidebar-search')!, '');
+  await setInputValue(
+    app.container.querySelector<HTMLInputElement>('.history-sidebar .sidebar-search')!,
+    '',
+  );
   await act(async () =>
     app.container.querySelector<HTMLButtonElement>('.history-entry[title="Empty commit"]')!.click(),
   );
@@ -756,6 +773,18 @@ test('history summarizes the selected commit independently of file and history f
     expect(app.container.querySelector('.sidebar-total-empty')?.textContent).toBe('—'),
   );
   expect(app.container.querySelector('.sidebar-summary-footer')).not.toBeNull();
+  await setInputValue(
+    app.container.querySelector<HTMLInputElement>('.history-sidebar .sidebar-search')!,
+    'no matches',
+  );
+  await act(async () =>
+    app.container.querySelector<HTMLButtonElement>('.history-local .history-entry')!.click(),
+  );
+  await waitFor(() => expect(total()).toBe('+3-3'));
+  expect(
+    app.container.querySelector('.history-local .history-entry')?.getAttribute('aria-pressed'),
+  ).toBe('true');
+  expect(app.container.querySelector('.files-sidebar file-tree-container')).not.toBeNull();
 });
 
 test('repository reload restores the selected file when it still exists', async () => {
@@ -2743,9 +2772,6 @@ test('refreshing all changes re-resolves the branch snapshot', async () => {
     ref: 'main',
     type: 'branch-working-tree',
   });
-  await act(async () => {
-    findButton('History')?.click();
-  });
   await waitFor(() => {
     expect(findButton('Committed only vs main')).toBeTruthy();
   });
@@ -2856,10 +2882,6 @@ test('history filter matches commits by author name', async () => {
   document.body.append(container);
   let root: Root | null = null;
 
-  const findButton = (label: string) =>
-    Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes(label),
-    );
   const historySubjects = () =>
     Array.from(container.querySelectorAll('.history-entry-subject')).map(
       (element) => element.textContent,
@@ -2880,14 +2902,11 @@ test('history filter matches commits by author name', async () => {
   await waitFor(() => {
     expect(container.querySelector('.loading')).toBeNull();
   });
-  await act(async () => {
-    findButton('History')?.click();
-  });
   await waitFor(() => {
     expect(historySubjects()).toContain('Fix parser');
     expect(historySubjects()).toContain('Update docs');
   });
-  const searchInput = container.querySelector<HTMLInputElement>('.sidebar-search');
+  const searchInput = container.querySelector<HTMLInputElement>('.history-sidebar .sidebar-search');
   expect(searchInput).toBeTruthy();
   const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   await act(async () => {
