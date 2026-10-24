@@ -1,3 +1,4 @@
+import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/CaretDown';
 import type { ReactNode } from 'react';
 import { ReviewModeControl, type ReviewModeItem } from './ReviewModeControl.tsx';
 
@@ -9,6 +10,7 @@ export function ReviewTopBar<Mode extends string>({
   mode,
   modes,
   onModeChange,
+  onSwitchRepository,
   repository,
   repositoryTooltip,
   sourceMenu,
@@ -17,6 +19,7 @@ export function ReviewTopBar<Mode extends string>({
   center?: ReactNode;
   context?: ReactNode;
   leading?: ReactNode;
+  onSwitchRepository?: () => void;
   repository: ReactNode;
   repositoryTooltip?: string;
   sourceMenu?: ReactNode;
@@ -33,15 +36,25 @@ export function ReviewTopBar<Mode extends string>({
       <div className="review-top-bar-left">
         {leading}
         {sourceMenu}
-        <div className="review-top-bar-repository-slot" title={repositoryTooltip}>
-          {repository}
-        </div>
+        {modes ? (
+          <ReviewModeControl mode={mode} modes={modes} onModeChange={onModeChange} />
+        ) : (
+          center
+        )}
       </div>
-      {modes ? (
-        <ReviewModeControl mode={mode} modes={modes} onModeChange={onModeChange} />
-      ) : (
-        <div className="review-top-bar-center">{center}</div>
-      )}
+      <div className="review-top-bar-center">
+        <button
+          aria-haspopup="menu"
+          aria-label="Switch project"
+          className="review-top-bar-repository-slot repository-switcher"
+          onClick={onSwitchRepository}
+          title={repositoryTooltip}
+          type="button"
+        >
+          {repository}
+          <CaretDown aria-hidden className="repository-switcher-chevron" size={14} weight="bold" />
+        </button>
+      </div>
       <div className="review-top-bar-right">
         {context ? <div className="review-top-bar-context">{context}</div> : null}
         {actions ? <div className="review-top-bar-actions">{actions}</div> : null}

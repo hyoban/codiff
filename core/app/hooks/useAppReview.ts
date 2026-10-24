@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { buildCommitModel } from '../../lib/commit.ts';
+import { readProjectCommitDraft, writeProjectCommitDraft } from '../../lib/project-sessions.ts';
 import { getSourceKey } from '../../lib/source.ts';
 import type { RepositoryState, CommitRequest } from '../../types.ts';
 
@@ -22,13 +23,23 @@ export function useAppReview({
   const previousPaths = useRef(new Set<string>());
   const resetKey = state ? `${state.root}:${getSourceKey(state.source)}` : '';
   const previousKey = useRef(resetKey);
+  const draftRestored = useRef(false);
   useEffect(() => {
     const paths = new Set(commitModel.files.map((file) => file.path));
-    if (previousKey.current !== resetKey) {
+    if (previousKey.current !== resetKey || (!draftRestored.current && resetKey)) {
+      const saved =
+        !draftRestored.current && state?.source.type === 'working-tree'
+          ? readProjectCommitDraft(state.root)
+          : null;
+      if (resetKey) {
+        draftRestored.current = true;
+      }
       previousKey.current = resetKey;
-      setCommitSubject('');
-      setCommitBody('');
-      setCommitSelected(paths);
+      setCommitSubject(saved?.subject ?? '');
+      setCommitBody(saved?.body ?? '');
+      setCommitSelected(
+        saved ? new Set([...paths].filter((path) => !saved.excluded.includes(path))) : paths,
+      );
     } else {
       const oldPaths = previousPaths.current;
       setCommitSelected(
@@ -36,7 +47,23 @@ export function useAppReview({
       );
     }
     previousPaths.current = paths;
-  }, [commitModel, resetKey]);
+  }, [commitModel, resetKey, state]);
+
+  useEffect(() => {
+    const saveDraft = () => {
+      if (state?.source.type === 'working-tree') {
+        writeProjectCommitDraft(state.root, {
+          body: commitBody,
+          excluded: commitModel.files
+            .map((file) => file.path)
+            .filter((path) => !commitSelected.has(path)),
+          subject: commitSubject,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', saveDraft);
+    return () => window.removeEventListener('beforeunload', saveDraft);
+  }, [commitBody, commitModel, commitSelected, commitSubject, state]);
   const toggleCommitGroup = useCallback((paths: ReadonlyArray<string>) => {
     setCommitSelected((current) => {
       const next = new Set(current);

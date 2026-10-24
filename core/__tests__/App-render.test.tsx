@@ -238,8 +238,9 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     status: 'uploaded' as const,
     url: 'https://codiff.dev/p/test',
   })),
-
   showInFolder: vi.fn(async () => {}),
+
+  showRepositoryMenu: vi.fn(async () => {}),
   submitPullRequestComment: vi.fn(async () => {
     throw new Error('Unexpected pull request comment submit.');
   }),
@@ -2985,4 +2986,22 @@ test('file and diff search shortcuts reopen only their target panels', async () 
   expect(app.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(true);
   await act(async () => dispatchModifiedKey('f'));
   expect(app.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(false);
+});
+
+test('panel toggles sit on the left and the centered project name opens the project menu', async () => {
+  const showRepositoryMenu = vi.fn(async () => {});
+  window.codiff = createCodiffMock({ showRepositoryMenu });
+  await using app = await renderReact(<App />);
+  await waitFor(() =>
+    expect(app.container.querySelector('.panel-visibility-controls')).not.toBeNull(),
+  );
+  expect(
+    app.container.querySelectorAll('.review-top-bar-left .panel-visibility-controls button'),
+  ).toHaveLength(3);
+  const project = app.container.querySelector<HTMLButtonElement>(
+    '.review-top-bar-center .repository-switcher',
+  );
+  expect(project?.textContent).toContain('/repo');
+  await act(async () => project!.click());
+  expect(showRepositoryMenu).toHaveBeenCalledOnce();
 });

@@ -88,7 +88,7 @@ codiff --completions fish | source
 codiff --completions zsh > ~/.zsh/completions/_codiff
 ```
 
-Launching Codiff in multiple repositories opens a separate native window for each repository.
+Projects open in the same native window. Click the project name in the center of the title bar to switch between recent projects or open another folder. The History, Files, and Diff toggles sit on the left.
 
 ## Command Bar
 

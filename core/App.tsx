@@ -63,6 +63,7 @@ import {
   writePanelVisibility,
   type ReviewPanel,
 } from './lib/panel-layout.ts';
+import { readProjectSessions, writeProjectSessions } from './lib/project-sessions.ts';
 import {
   consumeReloadSelection,
   getChangedPaths,
@@ -647,6 +648,8 @@ export default function App({
         ...nextState,
         files: sortFiles(nextState.files),
       };
+      sourceSessionsRef.current = readProjectSessions(orderedState.root);
+      const restoredSession = sourceSessionsRef.current.get(getSourceKey(orderedState.source));
       if (
         orderedState.files.some(
           (file) =>
@@ -706,14 +709,23 @@ export default function App({
       stateRef.current = orderedState;
       setState(orderedState);
       setLoadError(null);
-      setCollapsed(getCollapsedViewedPaths(orderedState.files, nextViewed));
-      setExpandedReviewKeys(new Set());
+      setCollapsed(
+        restoredSession?.collapsed ?? getCollapsedViewedPaths(orderedState.files, nextViewed),
+      );
+      setExpandedReviewKeys(restoredSession?.expandedReviewKeys ?? new Set());
       setItemVersionByKey({});
       resetCommentFocus();
       setReloadDeltaPaths(nextReloadDeltaPaths);
-      setReviewComments(getReviewCommentsFromState(orderedState));
+      setReviewComments(
+        restoredSession?.reviewComments ?? getReviewCommentsFromState(orderedState),
+      );
       setViewed(nextViewed);
-      const nextSelectedPath = reloadSelectedPath ?? orderedState.files[0]?.path ?? null;
+      const restoredPath = restoredSession?.selectedPath;
+      const nextSelectedPath =
+        reloadSelectedPath ??
+        (restoredPath && orderedState.files.some((file) => file.path === restoredPath)
+          ? restoredPath
+          : (orderedState.files[0]?.path ?? null));
       setSelectedPath(nextSelectedPath);
       if (reloadSelectedPath) {
         scrollPathIntoReview(reloadSelectedPath, 'instant');
@@ -1288,6 +1300,10 @@ export default function App({
 
   useEffect(() => {
     const writeCurrentReloadSelection = () => {
+      saveCurrentSourceSession();
+      if (stateRef.current) {
+        writeProjectSessions(stateRef.current.root, sourceSessionsRef.current);
+      }
       writeReloadSelection(
         stateRef.current,
         selectedPathRef.current,
@@ -1298,7 +1314,7 @@ export default function App({
 
     window.addEventListener('beforeunload', writeCurrentReloadSelection);
     return () => window.removeEventListener('beforeunload', writeCurrentReloadSelection);
-  }, [mainModeRef]);
+  }, [mainModeRef, saveCurrentSourceSession]);
 
   const selectSource = useCallback(
     (
@@ -1705,6 +1721,9 @@ export default function App({
             ) : null}
           </>
         }
+        onSwitchRepository={() => {
+          void window.codiff.showRepositoryMenu();
+        }}
         repository={
           <span className="review-top-bar-repository review-top-bar-repository-path">
             <span className="review-top-bar-repository-head">{repositoryPathParts.head}</span>

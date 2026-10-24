@@ -4900,3 +4900,43 @@ diffs-container .review-comment-thread {
   background: var(--app-bg);
   font-size: 12px;
 }
+
+/* Keep the project switcher available even in compact windows. */
+.three-column .repository-switcher {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 5px 8px;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.repository-switcher:hover {
+  background: var(--hover-wash);
+}
+
+.repository-switcher-chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .three-column .review-top-bar-left {
+    gap: 2px;
+  }
+
+  .three-column .review-top-bar-center {
+    position: static;
+    transform: none;
+    grid-column: 2;
+    max-width: 100%;
+  }
+
+  .three-column .review-top-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px;
+  }
+}

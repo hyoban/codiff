@@ -101,8 +101,9 @@ declare global {
       setShowOutdated: (value: boolean) => Promise<void>;
       setWordWrap: (value: boolean) => Promise<void>;
       sharePlan: (review: PlanReview) => Promise<SharePlanResult>;
-
       showInFolder: (path: string) => Promise<void>;
+
+      showRepositoryMenu: () => Promise<void>;
       submitPullRequestComment: (
         request: SubmitPullRequestCommentRequest,
       ) => Promise<PullRequestExistingReviewComment>;

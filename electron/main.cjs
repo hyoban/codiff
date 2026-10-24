@@ -30,6 +30,8 @@ const {
 const { attachExternalLinkHandling } = require('./external-links.cjs');
 
 const { createCommit } = require('./commit.cjs');
+const { createRecentRepositories } = require('./recent-repositories.cjs');
+const recentRepositories = createRecentRepositories();
 const { readKeyboardLayout, watchKeyboardLayout } = require('./keyboard-layout.cjs');
 
 const {
@@ -117,6 +119,14 @@ const windowIdentities = new Map();
 const windowRepositories = new Map();
 /** @type {Map<number, CodiffLaunchOptions>} */
 const windowLaunchOptions = new Map();
+/** @type {Map<number, {repositoryPath: string; launchOptions: CodiffLaunchOptions; identity: WindowIdentity | null}>} */
+const pendingRepositoryLaunches = new Map();
+/** @type {Map<number, number>} */
+const repositoryGenerations = new Map();
+/** @type {Map<number, string>} */
+const watchedRepositoryRoots = new Map();
+/** @type {Map<string, CodiffLaunchOptions>} */
+const repositoryLaunchHistory = new Map();
 /** @type {Map<number, Promise<RepositoryState>>} */
 const windowInitialRepositoryStates = new Map();
 /** @type {Map<number, string>} */
@@ -186,6 +196,9 @@ const storeResolvedRepositoryState = (webContentsId, state) => {
       ...launchOptions,
       source: state.source,
     });
+  }
+  if (launchOptions && !launchOptions.planFile) {
+    repositoryLaunchHistory.set(state.root, { ...launchOptions, source: state.source });
   }
   const identity = getWindowIdentityForRepositoryState(state);
   if (identity) {
@@ -340,6 +353,7 @@ const resetCodeFontSize = () => {
 
 /** @param {string} repositoryPath */
 const rememberLastRepositoryPath = (repositoryPath) => {
+  recentRepositories.remember(repositoryPath);
   if (config.settings.lastRepositoryPath === repositoryPath) {
     return;
   }
@@ -399,6 +413,7 @@ const finishRepositorySelfWrite = (token, version) =>
 /** @param {import('electron').BrowserWindow} browserWindow @param {string} repositoryPath */
 const startRepositoryWatcher = (browserWindow, repositoryPath) => {
   const webContentsId = browserWindow.webContents.id;
+  watchedRepositoryRoots.set(webContentsId, repositoryPath);
   void repositoryWatcherCoordinator.attach({
     getState: () => ({
       focused: !browserWindow.isDestroyed() && browserWindow.isFocused(),
@@ -789,7 +804,7 @@ const createWindow = (
     ? null
     : readInitialRepositoryStateWithConfig(repositoryPath, launchOptions);
   const initialRepositoryState = initialRepositoryStatePromise?.then((state) => {
-    if (!window.isDestroyed()) {
+    if (!window.isDestroyed() && !repositoryGenerations.get(webContentsId)) {
       storeResolvedRepositoryState(webContentsId, state);
     }
     return state;
@@ -808,7 +823,8 @@ const createWindow = (
       .then((state) => {
         if (
           (state.source.type === 'working-tree' || state.source.type === 'branch-working-tree') &&
-          !window.isDestroyed()
+          !window.isDestroyed() &&
+          !repositoryGenerations.get(webContentsId)
         ) {
           startRepositoryWatcher(window, state.root);
         }
@@ -841,6 +857,8 @@ const createWindow = (
     // Electron uses preventDefault here to allow the otherwise blocked unload.
     if (response === 1) {
       event.preventDefault();
+    } else {
+      pendingRepositoryLaunches.delete(webContentsId);
     }
   });
   window.on('close', (event) => {
@@ -892,6 +910,7 @@ const createWindow = (
     openWindows.delete(window);
     definitionSearchCoordinator.cancel(webContentsId);
     repositoryWatcherCoordinator.detach(webContentsId);
+    watchedRepositoryRoots.delete(webContentsId);
     clearMarkdownDocumentWatchers(webContentsId);
     completedPlanWindows.delete(webContentsId);
     planInitialVersions.delete(webContentsId);
@@ -899,6 +918,8 @@ const createWindow = (
     windowIdentities.delete(webContentsId);
     windowRevealControllers.delete(webContentsId);
     windowInitialRepositoryStates.delete(webContentsId);
+    pendingRepositoryLaunches.delete(webContentsId);
+    repositoryGenerations.delete(webContentsId);
     windowRepositories.delete(webContentsId);
     windowLaunchOptions.delete(webContentsId);
   });
@@ -919,7 +940,10 @@ const createWindow = (
     if (!currentLaunchOptions?.planFile) {
       // The renderer's static HTML title can replace the title set while repository state loads.
       // Reapply the resolved title after every navigation so the native window list stays useful.
-      void restoreRepositoryWindowTitleAfterLoad(window, initialRepositoryState).catch(() => {});
+      void restoreRepositoryWindowTitleAfterLoad(
+        window,
+        windowInitialRepositoryStates.get(webContentsId),
+      ).catch(() => {});
       return;
     }
     // The renderer's static HTML title replaces constructor titles during navigation.
@@ -1024,12 +1048,54 @@ const shareSnapshot = async (context, snapshot) => {
   }
 };
 
+/** @param {number} webContentsId */
+const activatePendingRepositoryLaunch = (webContentsId) => {
+  const pending = pendingRepositoryLaunches.get(webContentsId);
+  if (!pending) {
+    return;
+  }
+  pendingRepositoryLaunches.delete(webContentsId);
+  repositoryGenerations.set(webContentsId, (repositoryGenerations.get(webContentsId) ?? 0) + 1);
+  definitionSearchCoordinator.cancel(webContentsId);
+  repositoryWatcherCoordinator.detach(webContentsId);
+  watchedRepositoryRoots.delete(webContentsId);
+  clearMarkdownDocumentWatchers(webContentsId);
+  windowInitialRepositoryStates.delete(webContentsId);
+  windowIdentities.set(webContentsId, pending.identity);
+  windowRepositories.set(webContentsId, pending.identity?.repositoryRoot || pending.repositoryPath);
+  windowLaunchOptions.set(webContentsId, pending.launchOptions);
+};
+
 /**
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} [launchOptions]
  */
 const focusOrCreateWindow = (repositoryPath, launchOptions = { repositoryPathProvided: true }) => {
   const identity = getWindowIdentity(repositoryPath, launchOptions);
+  if (!launchOptions.planFile) {
+    const reviewWindow = BrowserWindow.getAllWindows().find(
+      (window) =>
+        !window.isDestroyed() && !windowLaunchOptions.get(window.webContents.id)?.planFile,
+    );
+    if (reviewWindow) {
+      const id = reviewWindow.webContents.id;
+      if (!identity || windowIdentities.get(id)?.key !== identity.key) {
+        pendingRepositoryLaunches.set(id, {
+          identity,
+          launchOptions: {
+            ...launchOptions,
+            source: launchOptions.source ?? { type: 'working-tree' },
+          },
+          repositoryPath,
+        });
+        reviewWindow.reload();
+      } else {
+        pendingRepositoryLaunches.delete(id);
+      }
+      focusWindow(reviewWindow);
+      return reviewWindow;
+    }
+  }
   const matchingWebContentsId = findMatchingWindowIdentity(identity, windowIdentities);
   const matchingWindow =
     matchingWebContentsId == null
@@ -1172,6 +1238,7 @@ if (squirrelStartup || !lock) {
 
 ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
+  const generation = repositoryGenerations.get(event.sender.id);
   const launchOptions = windowLaunchOptions.get(event.sender.id);
   const initialState = !source ? windowInitialRepositoryStates.get(event.sender.id) : undefined;
   if (initialState) {
@@ -1180,9 +1247,21 @@ ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   const state = initialState
     ? await initialState
     : await readRepositoryStateWithConfig(repositoryPath, source || launchOptions?.source);
+  if (repositoryGenerations.get(event.sender.id) !== generation) {
+    return state;
+  }
   storeResolvedRepositoryState(event.sender.id, state);
   rememberLastRepositoryPath(state.root);
-  void resetRepositoryWatcher(event.sender.id, state.root);
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (
+    window &&
+    (state.source.type === 'working-tree' || state.source.type === 'branch-working-tree') &&
+    watchedRepositoryRoots.get(event.sender.id) !== state.root
+  ) {
+    startRepositoryWatcher(window, state.root);
+  } else {
+    void resetRepositoryWatcher(event.sender.id, state.root);
+  }
   return state;
 });
 
@@ -1291,13 +1370,10 @@ ipcMain.handle('codiff:markPlanReady', async (event) => {
   writePlanResult(event.sender.id, 'open');
 });
 
-ipcMain.handle(
-  'codiff:getLaunchOptions',
-  (event) =>
-    windowLaunchOptions.get(event.sender.id) || {
-      repositoryPathProvided: false,
-    },
-);
+ipcMain.handle('codiff:getLaunchOptions', (event) => {
+  activatePendingRepositoryLaunch(event.sender.id);
+  return windowLaunchOptions.get(event.sender.id) || { repositoryPathProvided: false };
+});
 
 ipcMain.handle('codiff:getTerminalHelperStatus', () => getTerminalHelperStatus());
 
@@ -1428,6 +1504,30 @@ ipcMain.handle('codiff:resetCodeFontSize', () => {
 });
 
 ipcMain.handle('codiff:openConfigFile', () => openConfigFile());
+
+ipcMain.handle('codiff:showRepositoryMenu', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    return;
+  }
+  const current = getWindowRepositoryRoot(event.sender.id);
+  const paths = [...new Set([current, ...recentRepositories.list()])];
+  Menu.buildFromTemplate([
+    ...paths.map((path) => ({
+      checked: path === current,
+      click: () =>
+        focusOrCreateWindow(
+          path,
+          repositoryLaunchHistory.get(path) ?? { repositoryPathProvided: true },
+        ),
+      enabled: existsSync(path),
+      label: `${basename(path)} — ${path}`,
+      type: /** @type {const} */ ('radio'),
+    })),
+    { type: 'separator' },
+    { label: 'Open Folder…', click: () => openRepositoryFolder(window) },
+  ]).popup({ window });
+});
 
 ipcMain.handle('codiff:openRepositoryFolder', (event) =>
   openRepositoryFolder(BrowserWindow.fromWebContents(event.sender) ?? undefined),
