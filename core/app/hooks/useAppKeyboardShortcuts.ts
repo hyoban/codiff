@@ -4,27 +4,25 @@ import type { CodiffKeymap } from '../../config/types.ts';
 import { isNativeInputTarget } from '../../lib/keyboard.ts';
 
 type UseAppKeyboardShortcutsOptions = {
+  filesPanelHidden: boolean;
   keymap: CodiffKeymap;
   navigateHunks: (direction: 1 | -1) => void;
   onFocusFileFilter: () => void;
   onOpenDiffSearch: () => void;
   onOpenSelectedFile: () => void;
-  onToggleSidebar: () => void;
   onToggleWordWrap: () => void;
   shouldDeferHunkNavigation: () => boolean;
-  sidebarCollapsed: boolean;
 };
 
 export function useAppKeyboardShortcuts({
+  filesPanelHidden,
   keymap,
   navigateHunks,
   onFocusFileFilter,
   onOpenDiffSearch,
   onOpenSelectedFile,
-  onToggleSidebar,
   onToggleWordWrap,
   shouldDeferHunkNavigation,
-  sidebarCollapsed,
 }: UseAppKeyboardShortcutsOptions) {
   const [commandBarVisible, setCommandBarVisible] = useState(false);
   const [shortcutsHelpVisible, setShortcutsHelpVisible] = useState(false);
@@ -38,11 +36,6 @@ export function useAppKeyboardShortcuts({
       if (matchesShortcut(event, keymap, 'commandBar')) {
         event.preventDefault();
         setCommandBarVisible((current) => !current);
-        return;
-      }
-      if (matchesShortcut(event, keymap, 'toggleSidebar')) {
-        event.preventDefault();
-        onToggleSidebar();
         return;
       }
       if (!isNativeInputTarget(event.target) && matchesShortcut(event, keymap, 'toggleWordWrap')) {
@@ -78,7 +71,7 @@ export function useAppKeyboardShortcuts({
           return;
         }
       }
-      if (sidebarCollapsed && matchesShortcut(event, keymap, 'fileFilter')) {
+      if (filesPanelHidden && matchesShortcut(event, keymap, 'fileFilter')) {
         event.preventDefault();
         event.stopImmediatePropagation();
         onFocusFileFilter();
@@ -93,10 +86,9 @@ export function useAppKeyboardShortcuts({
     onFocusFileFilter,
     onOpenDiffSearch,
     onOpenSelectedFile,
-    onToggleSidebar,
     onToggleWordWrap,
     shouldDeferHunkNavigation,
-    sidebarCollapsed,
+    filesPanelHidden,
   ]);
 
   useEffect(() => {

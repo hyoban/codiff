@@ -107,7 +107,6 @@ The command bar includes actions for common review workflows:
 - Toggle Viewed for the currently selected file
 - Toggle Diff Layout, with the target layout action shown as the hint
 - Open the currently selected file in your editor
-- Toggle Sidebar
 - Reload Window
 
 ## Configuration
@@ -145,7 +144,6 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "closeSearch": "Escape",
     "submitComment": "Mod+Enter",
     "discardComment": "Escape",
-    "toggleSidebar": "Mod+Shift+b",
   },
 }
 ```

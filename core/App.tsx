@@ -1094,13 +1094,6 @@ export default function App({
     () => getVisibleReviewComments(reviewComments, showOutdated),
     [reviewComments, showOutdated],
   );
-  const toggleSidebar = useCallback(() => {
-    setVisiblePanels((current) => {
-      const visible = !current.history && !current.files;
-      return { ...current, files: visible, history: visible };
-    });
-  }, []);
-
   const toggleWordWrap = useCallback(() => {
     void window.codiff.setWordWrap(!preferencesRef.current.wordWrap).catch(() => {});
   }, []);
@@ -1149,16 +1142,15 @@ export default function App({
   }, [getReviewCommandTarget, openFile]);
 
   const { closeCommandBar, commandBarVisible, shortcutsHelpVisible } = useAppKeyboardShortcuts({
+    filesPanelHidden: !visiblePanels.files,
     keymap: codiffConfig.keymap,
     navigateHunks,
     onFocusFileFilter: focusFileFilter,
     onOpenDiffSearch: openDiffSearch,
     onOpenSelectedFile: openSelectedFile,
-    onToggleSidebar: toggleSidebar,
     onToggleWordWrap: toggleWordWrap,
-    shouldDeferHunkNavigation: () => false,
 
-    sidebarCollapsed: !visiblePanels.files,
+    shouldDeferHunkNavigation: () => false,
   });
 
   useEffect(() => window.codiff.onFindInDiffs(openDiffSearch), [openDiffSearch]);
@@ -1453,7 +1445,6 @@ export default function App({
     onOpenReviewSource: showOpenReviewSourceDialog,
     onOpenSelectedFile: openSelectedFile,
     onRefreshRepository: refreshRepository,
-    onToggleSidebar: toggleSidebar,
     onToggleViewed: toggleViewed,
     onToggleWordWrap: toggleWordWrap,
     preferencesRef,

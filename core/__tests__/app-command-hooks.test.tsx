@@ -71,7 +71,6 @@ test('app commands register the complete command set and delegate dynamic action
   const onOpenReviewSource = vi.fn();
   const onOpenSelectedFile = vi.fn();
   const onRefreshRepository = vi.fn();
-  const onToggleSidebar = vi.fn();
   const onToggleViewed = vi.fn();
   const onToggleWordWrap = vi.fn();
   let commands: ReturnType<typeof useAppCommands> = [];
@@ -86,7 +85,6 @@ test('app commands register the complete command set and delegate dynamic action
         onOpenReviewSource,
         onOpenSelectedFile,
         onRefreshRepository,
-        onToggleSidebar,
         onToggleViewed,
         onToggleWordWrap,
         preferencesRef,
@@ -110,7 +108,6 @@ test('app commands register the complete command set and delegate dynamic action
     'copy-comments-and-close',
     'toggle-viewed',
     'open-file',
-    'toggle-sidebar',
     'toggle-outdated-comments',
     'toggle-diff-layout',
     'toggle-word-wrap',
@@ -134,7 +131,6 @@ test('app commands register the complete command set and delegate dynamic action
   command('open-branch').execute();
   command('sidebar-history').execute();
   command('open-file').execute();
-  command('toggle-sidebar').execute();
   command('toggle-word-wrap').execute();
   command('reload').execute();
   command('toggle-viewed').execute();
@@ -143,7 +139,6 @@ test('app commands register the complete command set and delegate dynamic action
   expect(onOpenReviewSource.mock.calls).toEqual([['pull-request'], ['commit'], ['branch']]);
   expect(changeSidebarMode).toHaveBeenCalledWith('history');
   expect(onOpenSelectedFile).toHaveBeenCalledOnce();
-  expect(onToggleSidebar).toHaveBeenCalledOnce();
   expect(onToggleWordWrap).toHaveBeenCalledOnce();
   expect(onRefreshRepository).toHaveBeenCalledOnce();
   expect(command('open-file').description?.()).toBe(file.path);
@@ -162,7 +157,6 @@ const keyboardKeymap = {
   openFile: 'o',
   prevHunk: 'p',
   shortcutsHelp: '?',
-  toggleSidebar: 'b',
   toggleWordWrap: 'z',
 };
 
@@ -190,15 +184,14 @@ test('shortcut help remains visible only while its key chord is held', async () 
     <AppKeyboardShortcutsHarness
       onState={(nextState) => (state = nextState)}
       options={{
+        filesPanelHidden: false,
         keymap: keyboardKeymap,
         navigateHunks: noop,
         onFocusFileFilter: noop,
         onOpenDiffSearch: noop,
         onOpenSelectedFile: noop,
-        onToggleSidebar: noop,
         onToggleWordWrap: noop,
         shouldDeferHunkNavigation: () => false,
-        sidebarCollapsed: false,
       }}
     />,
   );

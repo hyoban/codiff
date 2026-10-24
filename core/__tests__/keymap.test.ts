@@ -116,34 +116,34 @@ test('does not let one keypress match two different Alt shortcuts', () => {
   const { keydown, keymap } = createTestContext({
     commandBar: 'Alt+z',
     platform: 'Win32',
-    toggleSidebar: 'Alt+y',
+    toggleWordWrap: 'Alt+y',
   });
   const event = keydown({ altKey: true, code: 'KeyZ', key: 'y' });
 
   // Act
   const matched = {
     commandBar: matchesShortcut(event, keymap, 'commandBar'),
-    toggleSidebar: matchesShortcut(event, keymap, 'toggleSidebar'),
+    toggleWordWrap: matchesShortcut(event, keymap, 'toggleWordWrap'),
   };
 
   // Assert: the character the user typed wins; the US key position does not.
-  expect(matched).toEqual({ commandBar: false, toggleSidebar: true });
+  expect(matched).toEqual({ commandBar: false, toggleWordWrap: true });
 });
 
 test('lets a layout character win over the US key position it sits on', () => {
   // Arrange: AZERTY produces "é" natively at the US "2" position, so the
   // character is real input rather than something Option composed away.
-  const { keydown, keymap } = createTestContext({ commandBar: 'Alt+2', toggleSidebar: 'Alt+é' });
+  const { keydown, keymap } = createTestContext({ commandBar: 'Alt+2', toggleWordWrap: 'Alt+é' });
   const event = keydown({ altKey: true, code: 'Digit2', key: 'é' });
 
   // Act
   const matched = {
     commandBar: matchesShortcut(event, keymap, 'commandBar'),
-    toggleSidebar: matchesShortcut(event, keymap, 'toggleSidebar'),
+    toggleWordWrap: matchesShortcut(event, keymap, 'toggleWordWrap'),
   };
 
   // Assert
-  expect(matched).toEqual({ commandBar: false, toggleSidebar: true });
+  expect(matched).toEqual({ commandBar: false, toggleWordWrap: true });
 });
 
 test('does not fall back to the US key position on platforms that never compose', () => {
@@ -345,7 +345,7 @@ test('does not let a key spelling match its character on a different key', () =>
   // fire two different actions.
   const { keydown, keymap } = createTestContext({
     commandBar: 'Mod+Shift+/',
-    toggleSidebar: 'Mod+Shift+?',
+    toggleWordWrap: 'Mod+Shift+?',
   });
   applyKeyboardLayout({
     KeyQ: { value: 'q', withShift: 'Q' },
@@ -357,9 +357,9 @@ test('does not let a key spelling match its character on a different key', () =>
 
   // Act
   const matched = {
-    semicolonQuestion: matchesShortcut(onSemicolon, keymap, 'toggleSidebar'),
+    semicolonQuestion: matchesShortcut(onSemicolon, keymap, 'toggleWordWrap'),
     semicolonSlash: matchesShortcut(onSemicolon, keymap, 'commandBar'),
-    slashQuestion: matchesShortcut(onSlash, keymap, 'toggleSidebar'),
+    slashQuestion: matchesShortcut(onSlash, keymap, 'toggleWordWrap'),
     slashSlash: matchesShortcut(onSlash, keymap, 'commandBar'),
   };
 
@@ -962,7 +962,6 @@ function createTestContext({
     prevSearchMatch: 'Shift+Enter',
     shortcutsHelp: 'Shift+?',
     submitComment: 'Mod+Enter',
-    toggleSidebar: 'Mod+Shift+b',
     toggleWordWrap: 'Alt+z',
     ...overrides,
   } satisfies CodiffKeymap;

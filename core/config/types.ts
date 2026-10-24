@@ -40,7 +40,6 @@ export type CodiffKeymap = {
   prevSearchMatch: KeyCombo;
   shortcutsHelp: KeyCombo;
   submitComment: KeyCombo;
-  toggleSidebar: KeyCombo;
   toggleWordWrap: KeyCombo;
 };
 

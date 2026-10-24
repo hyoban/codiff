@@ -19,7 +19,6 @@ type UseAppCommandsOptions = {
   onOpenReviewSource: (kind: OpenReviewSourceKind) => void;
   onOpenSelectedFile: () => void;
   onRefreshRepository: () => void;
-  onToggleSidebar: () => void;
   onToggleViewed: (file: ChangedFile, isViewed: boolean, reviewIdentity: ReviewIdentity) => void;
   onToggleWordWrap: () => void;
   preferencesRef: RefObject<CodiffPreferences>;
@@ -36,7 +35,6 @@ export function useAppCommands({
   onOpenReviewSource,
   onOpenSelectedFile,
   onRefreshRepository,
-  onToggleSidebar,
   onToggleViewed,
   onToggleWordWrap,
   preferencesRef,
@@ -161,12 +159,6 @@ export function useAppCommands({
         title: 'Open File in Editor',
       }),
       registry.register({
-        execute: onToggleSidebar,
-        id: 'toggle-sidebar',
-        keymapAction: 'toggleSidebar',
-        title: 'Toggle Sidebar',
-      }),
-      registry.register({
         execute: () => {
           void window.codiff.setShowOutdated(!preferencesRef.current.showOutdated).catch(() => {});
         },
@@ -240,7 +232,6 @@ export function useAppCommands({
     onOpenReviewSource,
     onOpenSelectedFile,
     onRefreshRepository,
-    onToggleSidebar,
     onToggleViewed,
     onToggleWordWrap,
     preferencesRef,

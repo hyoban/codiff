@@ -262,10 +262,6 @@ const mergeConfig = (raw) => {
         typeof rawKeymap.submitComment === 'string'
           ? rawKeymap.submitComment
           : defaults.keymap.submitComment,
-      toggleSidebar:
-        typeof rawKeymap.toggleSidebar === 'string'
-          ? rawKeymap.toggleSidebar
-          : defaults.keymap.toggleSidebar,
       toggleWordWrap:
         typeof rawKeymap.toggleWordWrap === 'string'
           ? rawKeymap.toggleWordWrap

@@ -18,7 +18,6 @@ const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
       { action: 'fileFilter', label: 'Filter files' },
       { action: 'nextHunk', label: 'Next hunk / comment' },
       { action: 'prevHunk', label: 'Previous hunk / comment' },
-      { action: 'toggleSidebar', label: 'Toggle sidebar' },
       { action: 'toggleWordWrap', label: 'Toggle word wrap' },
       { action: 'openFile', label: 'Open file in editor' },
       { action: 'shortcutsHelp', label: 'Show this help' },
