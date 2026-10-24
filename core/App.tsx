@@ -36,7 +36,6 @@ import { useRepositoryAutoRefresh } from './app/hooks/useRepositoryAutoRefresh.t
 import { useResizableSidebar } from './app/hooks/useResizableSidebar.ts';
 import { useReviewFileState } from './app/hooks/useReviewState.ts';
 import { createDefaultConfig } from './config/defaults.ts';
-import { getShortcutLabel } from './config/keymap.ts';
 import type { CodiffConfig } from './config/types.ts';
 import {
   defaultLaunchOptions,
@@ -215,7 +214,6 @@ export default function App({
     null,
   );
   const [visiblePanels, setVisiblePanels] = useState(readPanelVisibility);
-  const sidebarCollapsed = !visiblePanels.history && !visiblePanels.files;
   useEffect(() => writePanelVisibility(visiblePanels), [visiblePanels]);
   const setPanelVisible = useCallback((panel: ReviewPanel, visible: boolean) => {
     setVisiblePanels((current) => ({ ...current, [panel]: visible }));
@@ -1716,7 +1714,6 @@ export default function App({
             ) : null}
           </>
         }
-        onToggleSidebar={toggleSidebar}
         repository={
           <span className="review-top-bar-repository review-top-bar-repository-path">
             <span className="review-top-bar-repository-head">{repositoryPathParts.head}</span>
@@ -1724,18 +1721,12 @@ export default function App({
           </span>
         }
         repositoryTooltip={state.root}
-        sidebarCollapsed={sidebarCollapsed}
-        sidebarPosition={preferences.sidebarPosition}
         sourceMenu={
           <OpenReviewSourceMenu
             onOpen={showOpenReviewSourceDialog}
             onOpenFolder={openRepositoryFolder}
           />
         }
-        toggleTitle={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar (${getShortcutLabel(
-          codiffConfig.keymap,
-          'toggleSidebar',
-        )})`}
       />
       <RepositoryChangeBanner
         onRefresh={refreshRepository}

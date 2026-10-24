@@ -445,11 +445,8 @@ test('stale persisted collapsed sidebar state does not hide the sidebar on launc
 
   const topBar = app.container.querySelector('.review-top-bar');
   expect(app.container.querySelector('.sidebar [role="tablist"]')).toBeNull();
-  const sidebarToggle = topBar?.querySelector<HTMLButtonElement>('.sidebar-toggle-button');
-  await act(async () => sidebarToggle?.click());
-  expect(app.container.querySelector<HTMLElement>('.history-sidebar')?.hidden).toBe(true);
-  expect(app.container.querySelector<HTMLElement>('.files-sidebar')?.hidden).toBe(true);
-  expect(app.container.querySelector<HTMLElement>('.review')?.hidden).toBe(false);
+  expect(topBar?.querySelector('.sidebar-toggle-button')).toBeNull();
+  expect(topBar?.querySelectorAll('.panel-visibility-controls button')).toHaveLength(3);
   expect(app.container.querySelector('.review-top-bar')).toBe(topBar);
 });
 
