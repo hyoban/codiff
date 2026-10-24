@@ -1,25 +1,19 @@
 # Codiff
 
-Codiff is a beautiful, minimal, local diff viewer for reviewing Git changes and committing them.
+This fork of Codiff is a read-only Git diff viewer with local review comments.
 
 <img width="48%" src="https://github.com/user-attachments/assets/9801587d-5879-461a-b375-9fbfa3c5f25d" />
 <img width="48%" src="https://github.com/user-attachments/assets/8b92902b-1112-4553-ba59-74e84a61ca7d" />
 
 ## Why Codiff
 
-- **Fast Local Reviews:** Review and commit changes in any Git repository.
-- **Inline Review Comments:** Comment directly on GitHub pull requests and GitLab merge requests, or copy review comments as Markdown for follow-ups.
+- **Fast Local Reviews:** Read working-tree changes, commit history, branch comparisons, and pull request diffs.
+- **Inline Review Comments:** Write local notes and copy them as Markdown. Existing remote comments are displayed without posting, editing, or resolving them.
 - **Lightweight Definition Navigation:** Mod/Ctrl-click an identifier to find likely local definitions without starting a language server.
 
 ## Download
 
-Install with Homebrew:
-
-```bash
-brew install --cask nkzw-tech/tap/codiff
-```
-
-Download the latest Codiff app from [GitHub Releases](https://github.com/nkzw-tech/codiff/releases).
+Build this fork locally with `vpr build` and `vpr package:app`.
 
 After installing the app, run `Codiff > Install Terminal Helper` to make the `codiff` command available in your shell.
 
@@ -61,12 +55,6 @@ requests from forks.
 Full GitHub and GitLab review URLs are also supported. GitLab hosts and nested project paths are
 derived from the URL or local Git remote and authenticated through `glab`; Codiff does not require
 instance-specific configuration.
-
-Share a Markdown plan:
-
-```bash
-codiff --plan plan.md --share
-```
 
 Show all available options:
 
@@ -202,10 +190,11 @@ vp test
 vp build
 ```
 
-Run `vpr test:integration` to build and test the public sharing service.
+Repository files, the Git index, refs, and remote reviews are never modified by Codiff. Git optional locks are disabled, and opening a PR never fetches objects into the repository. Full PR context uses objects already present locally; otherwise Codiff displays the remote patch.
+
+Local comments, viewed state, preferences, recent projects, and window layout can still be saved. Opening a file in an external editor remains available; edits made there are outside Codiff.
 
 ## Contributing
 
 Found an issue, or want to improve something? See the
-[contributing guide](CONTRIBUTING.md) for local application and public web
-service setup.
+[contributing guide](CONTRIBUTING.md) for local application setup.

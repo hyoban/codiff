@@ -6,14 +6,12 @@ import { isNativeInputTarget } from '../../lib/keyboard.ts';
 import { getShortRef, getSourceKey } from '../../lib/source.ts';
 import type { ChangedFile, HistoryEntry, ReviewSource } from '../../types.ts';
 import { Avatar } from './Avatar.tsx';
-import { Button } from './Button.tsx';
 import { DiffSummaryFooter } from './DiffSummaryFooter.tsx';
 import { ReviewFileTree } from './FileTree.tsx';
 
 export function Sidebar({
   branchSource,
-  commitFiles,
-  commitViewOpen,
+
   currentSource,
   files,
   hidden = false,
@@ -28,7 +26,6 @@ export function Sidebar({
   onSearchQueryChange,
   onSelectSource,
 
-  onToggleCommitView,
   pullRequestSource,
   reloadDeltaPaths,
   searchQuery,
@@ -39,8 +36,7 @@ export function Sidebar({
   viewed,
 }: {
   branchSource: Extract<ReviewSource, { type: 'branch-diff' }> | null;
-  commitFiles: ReadonlyArray<ChangedFile>;
-  commitViewOpen: boolean;
+
   currentSource: ReviewSource;
   files: ReadonlyArray<ChangedFile>;
   hidden?: boolean;
@@ -55,7 +51,6 @@ export function Sidebar({
   onSearchQueryChange: (query: string) => void;
   onSelectSource: (source: ReviewSource) => void;
 
-  onToggleCommitView: () => void;
   pullRequestSource: PullRequestSource | null;
   reloadDeltaPaths: ReadonlySet<string>;
   searchQuery: string;
@@ -66,11 +61,6 @@ export function Sidebar({
   viewed: Record<string, string>;
 }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const showCommitButton =
-    !summaryLoading &&
-    mode === 'tree' &&
-    currentSource.type === 'working-tree' &&
-    commitFiles.length > 0;
 
   useEffect(() => {
     if (mode !== 'tree' || hidden) {
@@ -128,16 +118,7 @@ export function Sidebar({
       )}
       {mode === 'tree' ? (
         <DiffSummaryFooter files={files} loading={summaryLoading} showWhitespace={showWhitespace}>
-          {showCommitButton ? (
-            <Button
-              aria-label={commitViewOpen ? 'Show file tree' : 'Open commit view'}
-              className="sidebar-commit-button"
-              onClick={onToggleCommitView}
-              type="button"
-            >
-              {commitViewOpen ? 'Tree' : 'Commit'}
-            </Button>
-          ) : null}
+          {null}
         </DiffSummaryFooter>
       ) : null}
     </>

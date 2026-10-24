@@ -9,9 +9,7 @@ import type {} from './global.d.ts';
 import { preloadCodeView } from './lib/code-view-options.ts';
 
 const initialLaunchOptions = await window.codiff.getLaunchOptions();
-if (!initialLaunchOptions.planFile) {
-  preloadCodeView();
-}
+preloadCodeView();
 const initialConfig = await window.codiff.getConfig().catch(createDefaultConfig);
 
 // Reading the layout is asynchronous, so it starts here rather than blocking

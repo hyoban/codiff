@@ -4,11 +4,3 @@ export {
   type ResolveMarkdownImageSource,
 } from './lib/markdownImageSource.ts';
 export { Thinking } from './app/components/Thinking.tsx';
-export {
-  getPlanCommentAffordancePosition,
-  getPlanCommentColorIndex,
-  getPlanCommentIdentityColorIndex,
-  getSharedPlanDownloadContent,
-  PlanReviewSurface,
-  type PlanReviewCommenting,
-} from './SharedPlanApp.tsx';

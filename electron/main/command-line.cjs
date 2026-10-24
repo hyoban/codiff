@@ -117,13 +117,6 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       branch: {
         type: 'string',
       },
-
-      'plan-file': {
-        type: 'string',
-      },
-      'plan-result-file': {
-        type: 'string',
-      },
     },
     strict: false,
   });
@@ -136,16 +129,10 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   let repositoryPath = null;
   let sourceCandidate = null;
   let rangeCandidate = null;
-  const requestedPlanFilePath =
-    (typeof values['plan-file'] === 'string' ? values['plan-file'] : '') ||
-    (useEnvironment ? process.env.CODIFF_PLAN_FILE || '' : '');
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
-    if (requestedPlanFilePath) {
-      repositoryPath ??= arg;
-      continue;
-    }
+
     const parsedPullRequestUrl = pullRequestUrl ? null : parsePullRequestUrlArgument(arg);
     if (parsedPullRequestUrl) {
       pullRequestUrl = parsedPullRequestUrl;
@@ -222,15 +209,6 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   const envPullRequestUrl = useEnvironment ? process.env.CODIFF_PULL_REQUEST_URL || '' : '';
   const envReviewProvider = useEnvironment ? process.env.CODIFF_REVIEW_PROVIDER || '' : '';
 
-  const envPlanFilePath = useEnvironment ? process.env.CODIFF_PLAN_FILE || '' : '';
-  const envPlanResultFilePath = useEnvironment ? process.env.CODIFF_PLAN_RESULT_FILE || '' : '';
-
-  const planFilePath = requestedPlanFilePath || envPlanFilePath || undefined;
-  const planResultFilePath =
-    (typeof values['plan-result-file'] === 'string' ? values['plan-result-file'] : '') ||
-    envPlanResultFilePath ||
-    undefined;
-
   const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
   const sourceReviewProvider =
     envReviewProvider === 'github' || envReviewProvider === 'gitlab'
@@ -250,8 +228,8 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   );
   return {
     launchOptions: {
-      ...(planFilePath ? { planFile: resolve(planFilePath) } : {}),
-      ...(planResultFilePath ? { planResultFile: resolve(planResultFilePath) } : {}),
+      ...{},
+
       repositoryPathProvided,
       source:
         sourceRange && sourcePullRequestNumber == null
@@ -335,8 +313,7 @@ const getInitialRepositoryPath = (
     existsSync(lastRepositoryPath) &&
     !environment.CODIFF_REPOSITORY_PATH &&
     !launchOptions.repositoryPathProvided &&
-    !launchOptions.source &&
-    !launchOptions.planFile
+    !launchOptions.source
   ) {
     return resolve(lastRepositoryPath);
   }

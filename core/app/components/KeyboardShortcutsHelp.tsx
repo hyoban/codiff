@@ -25,10 +25,7 @@ const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
     title: 'Navigation',
   },
   {
-    shortcuts: [
-      { action: 'editFile', label: 'Edit highlighted file' },
-      { action: 'doneEditing', label: 'Done editing' },
-    ],
+    shortcuts: [{ action: 'doneEditing', label: 'Done editing' }],
     title: 'Editing',
   },
   {

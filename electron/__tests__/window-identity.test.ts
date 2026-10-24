@@ -61,38 +61,6 @@ const initRepository = async (path: string) => {
   await git(path, ['commit', '--allow-empty', '-m', 'initial']);
 };
 
-test(
-  'plan window identities do not invoke Git outside repositories',
-  { concurrent: false },
-  async () => {
-    await using directory = await createTemporaryDirectory('codiff-plan-window-identity-');
-    const fakeBin = join(directory.path, 'bin');
-    const gitMarker = join(directory.path, 'git-invoked');
-    const planFile = join(directory.path, 'plan.md');
-    await using _environment = createTemporaryEnvironment({
-      PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-    });
-
-    await mkdir(fakeBin);
-    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
-    await chmod(join(fakeBin, 'git'), 0o755);
-    await writeFile(planFile, '# Plan\n');
-    const realDirectory = await realpath(directory.path);
-    const realPlanFile = await realpath(planFile);
-
-    expect(
-      getWindowIdentity(directory.path, {
-        planFile,
-        planResultFile: join(directory.path, 'result.json'),
-      }),
-    ).toMatchObject({
-      repositoryRoot: realDirectory,
-      sourceKey: `plan:${realPlanFile}`,
-    });
-    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
-  },
-);
-
 test('window identities match working-tree launches inside the same repository', async () => {
   await using directory = await createTemporaryDirectory('codiff-window-identity-');
   await initRepository(directory.path);

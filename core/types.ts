@@ -1,4 +1,3 @@
-import type { MarkdownAnnotationAnchor } from '@nkzw/mdx-editor';
 import type { CodiffDiffStyle } from './config/types.ts';
 
 export type DiffSection = {
@@ -251,131 +250,7 @@ export type RepositoryState = {
   source: ReviewSource;
 };
 
-export type CodiffFeatureFlags = {
-  planSharing: boolean;
-};
-
-export type CodiffMarkdownDocument = {
-  content: string;
-  id: string;
-  kind: 'plan' | 'repository';
-  path: string;
-  version: string;
-};
-
-export type SaveMarkdownDocumentRequest = {
-  baseVersion: string;
-  content: string;
-  kind: CodiffMarkdownDocument['kind'];
-  path: string;
-};
-
-export type SaveMarkdownDocumentResult =
-  | {
-      document: CodiffMarkdownDocument;
-      status: 'conflict';
-    }
-  | {
-      document: CodiffMarkdownDocument;
-      status: 'saved';
-    };
-
-export type RepositoryFileDocument = {
-  content: string;
-  path: string;
-  root: string;
-  version: string;
-};
-
-export type SaveRepositoryFileRequest = Omit<RepositoryFileDocument, 'version'> & {
-  baseVersion: string;
-};
-
-export type SaveRepositoryFileResult = {
-  document: RepositoryFileDocument;
-  status: 'conflict' | 'saved';
-};
-
-export type PlanCommentAuthor = {
-  avatarUrl?: string;
-  email?: string;
-  id: string;
-  name: string;
-  username?: string;
-};
-
-export type PlanCommentMessage = {
-  author: PlanCommentAuthor;
-  body: string;
-  canDelete?: boolean;
-  canEdit?: boolean;
-  createdAt: string;
-  id: string;
-  updatedAt: string;
-};
-
-export type PlanCommentThread = {
-  anchor: MarkdownAnnotationAnchor;
-  canReply?: boolean;
-  canResolve?: boolean;
-  createdAt: string;
-  createdBy: PlanCommentAuthor;
-  id: string;
-  messages: ReadonlyArray<PlanCommentMessage>;
-  resolution?: {
-    reason: 'agent-handled' | 'anchor-removed';
-    resolvedAt: string;
-  };
-  status: 'open' | 'resolved';
-  updatedAt: string;
-};
-
-export type PlanReview = {
-  document: {
-    id: string;
-    path: string;
-    version: string;
-  };
-  threads: ReadonlyArray<PlanCommentThread>;
-  version: 1;
-};
-
-export type PlanHandoffStatus = 'closed' | 'done';
-
-export type SharedPlanSnapshot = {
-  codiffVersion: string;
-  document: {
-    content: string;
-    name: string;
-    title: string;
-  };
-  exportedAt: string;
-  kind: 'codiff-plan-share';
-  preferences: Pick<CodiffPreferences, 'theme'>;
-  review: {
-    threads: ReadonlyArray<PlanCommentThread>;
-    version: 1;
-  };
-  version: 1;
-};
-
-export type ShareResult =
-  | {
-      status: 'uploaded';
-      url: string;
-    }
-  | {
-      reason: string;
-      status: 'failed';
-    };
-
-export type SharePlanResult = ShareResult;
-
 export type CodiffLaunchOptions = {
-  /** Exact Markdown file opened by the blocking plan handoff. */
-  planFile?: string;
-  /** Result file used to resume the waiting CLI process. */
-  planResultFile?: string;
   repositoryPathProvided: boolean;
   source?: ReviewSource;
 };
@@ -420,26 +295,6 @@ export type ReviewHunk = {
 /** A changed hunk group kept off the main path. */
 
 /** Commit the selected working tree files. */
-export type CommitRequest = {
-  /** Body of the commit message (everything after the subject line). */
-  body: string;
-  /** Repo-relative paths to commit; other staged changes are left untouched. */
-  paths: ReadonlyArray<string>;
-  source?: ReviewSource;
-  /** First line of the commit message. */
-  subject: string;
-};
-
-export type CommitResult =
-  | {
-      /** Full SHA of the new commit. */
-      hash: string;
-      status: 'committed';
-    }
-  | {
-      reason: string;
-      status: 'failed';
-    };
 
 export type GitIdentity = {
   email: string;
@@ -579,15 +434,3 @@ export type PullRequestGeneralCommentThread = {
 };
 
 export type PullRequestReviewEvent = 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES';
-
-export type SubmitPullRequestCommentRequest = {
-  comment: PullRequestReviewComment;
-  source: Extract<ReviewSource, { type: 'pull-request' }>;
-};
-
-export type SubmitPullRequestReviewRequest = {
-  body?: string;
-  comments: ReadonlyArray<PullRequestReviewComment>;
-  event: PullRequestReviewEvent;
-  source: Extract<ReviewSource, { type: 'pull-request' }>;
-};

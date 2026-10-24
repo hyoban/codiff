@@ -102,11 +102,6 @@
           "default": "Mod+k",
           "description": "Open the command palette."
         },
-        "editFile": {
-          "type": "string",
-          "default": "Mod+e",
-          "description": "Start editing the currently highlighted working-tree file."
-        },
         "doneEditing": {
           "type": "string",
           "default": "Mod+s",

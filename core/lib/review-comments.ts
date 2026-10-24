@@ -1,10 +1,4 @@
-import type {
-  ChangedFile,
-  DiffSection,
-  PullRequestExistingReviewComment,
-  PullRequestReviewComment,
-  RepositoryState,
-} from '../types.ts';
+import type { ChangedFile, DiffSection, RepositoryState } from '../types.ts';
 import type { CodeViewInstance, ReviewComment } from './app-types.ts';
 import { parseSectionDiffWithOptions } from './diff.ts';
 
@@ -164,45 +158,6 @@ export const getReviewCommentRangeProps = (
       }
     : {};
 };
-
-export const toPullRequestReviewComment = (
-  comment: ReviewComment,
-  { includeSectionId = false }: { includeSectionId?: boolean } = {},
-): PullRequestReviewComment => ({
-  body: comment.body,
-  filePath: comment.filePath,
-  ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
-  ...(includeSectionId ? { sectionId: comment.sectionId } : {}),
-  ...(comment.side ? { side: comment.side } : {}),
-  ...getReviewCommentRangeProps(comment),
-  ...(comment.threadId ? { threadId: comment.threadId } : {}),
-});
-
-export const toSubmittedReviewComment = (
-  comment: PullRequestExistingReviewComment,
-  draft: ReviewComment,
-): ReviewComment => ({
-  ...(comment.anchor ? { anchor: comment.anchor } : {}),
-  author: comment.author,
-  body: comment.body,
-  ...(comment.canDelete ? { canDelete: true } : {}),
-  ...(comment.canEdit ? { canEdit: true } : {}),
-  ...(comment.canReplyThread === false ? { canReplyThread: false } : {}),
-  ...(comment.canResolveThread ? { canResolveThread: true } : {}),
-  filePath: comment.filePath,
-  id: comment.id,
-  ...(comment.isOutdated ? { isOutdated: true } : {}),
-  isReadOnly: true,
-  ...(comment.isThreadResolved ? { isThreadResolved: true } : {}),
-  ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
-  sectionId: comment.sectionId ?? draft.sectionId,
-  ...(comment.side ? { side: comment.side } : {}),
-  ...(comment.startLineNumber != null ? { startLineNumber: comment.startLineNumber } : {}),
-  ...(comment.startSide ? { startSide: comment.startSide } : {}),
-  ...(comment.submittedAt ? { submittedAt: comment.submittedAt } : {}),
-  ...(comment.threadId ? { threadId: comment.threadId } : {}),
-  ...(comment.url ? { url: comment.url } : {}),
-});
 
 export const mergeReviewComments = (
   snapshotComments: ReadonlyArray<ReviewComment>,

@@ -1,29 +1,17 @@
 packages:
   - core
-  - service
-  - test
-  - web
 
 allowBuilds:
-  '@google/genai': false
   '@nkzw/mdx-editor': true
   '@swc/core': true
-  better-sqlite3: true
   electron: true
   electron-winstaller: true
   esbuild: true
   native-keymap: true
-  node-pty: true
-  protobufjs: false
   sharp: true
-  workerd: true
 blockExoticSubdeps: false
 minimumReleaseAgeExclude:
   - '@nkzw/*'
-  - void-fate
-  - '@void/*'
-  - react-fate
-  - void
   - '@pierre/*'
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0

@@ -35,8 +35,6 @@ show_help() {
   printf '  %-38s%s%s%s\n' "--commit <ref>" "$gray" "Review a specific commit." "$reset"
   printf '  %-38s%s%s%s\n' "--completions <bash|fish|zsh>" "$gray" "Print a shell completion script, then exit." "$reset"
   printf '  %-38s%s%s%s\n' "--help, -h" "$gray" "Show this help message and exit." "$reset"
-  printf '  %-38s%s%s%s\n' "--plan <file>" "$gray" "Edit a Markdown plan and wait until it is handed back." "$reset"
-  printf '  %-38s%s%s%s\n' "--share" "$gray" "Share a --plan file, then print its URL." "$reset"
   printf '  %-38s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Examples:${reset}"
@@ -48,8 +46,6 @@ show_help() {
   printf '  %-32s%s%s%s\n' "codiff pr 75" "$gray" "Review pull request #75 (alternate syntax)." "$reset"
   printf '  %-32s%s%s%s\n' "codiff pr owner:feature" "$gray" "Review the open pull request for a branch." "$reset"
   printf '  %-32s%s%s%s\n' "codiff mr 75" "$gray" "Review GitLab merge request !75." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff --plan plan.md" "$gray" "Edit a plan and wait for handoff." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff --plan plan.md --share" "$gray" "Share a Markdown plan." "$reset"
 }
 
 resolve_runtime() {
@@ -71,7 +67,7 @@ resolve_runtime() {
 # helper hands the whole command line over to the bundled runtime.
 for arg in "$@"; do
   case "$arg" in
-    --share|--public|--completions|--completions=*)
+    --completions|--completions=*)
       resolve_runtime "$arg"
       ELECTRON_RUN_AS_NODE=1 exec "$runtime" "$script_dir/codiff.js" "$@"
       ;;
@@ -86,13 +82,9 @@ pull_request_branch=""
 pull_request_provider=""
 source_ref=""
 range_ref=""
-plan_file_path=""
-plan_result_file_path=""
 expect_branch_ref=0
 expect_commit_ref=0
 expect_pull_request_value=0
-expect_plan_file=0
-expect_plan_result_file=0
 
 is_commit_ref_arg() {
   ref_arg="$1"
@@ -180,18 +172,6 @@ for arg in "$@"; do
 
 
 
-  if [ "$expect_plan_file" -eq 1 ]; then
-    plan_file_path="$arg"
-    expect_plan_file=0
-    continue
-  fi
-
-  if [ "$expect_plan_result_file" -eq 1 ]; then
-    plan_result_file_path="$arg"
-    expect_plan_result_file=0
-    continue
-  fi
-
   if [ "$expect_pull_request_value" -eq 1 ]; then
     if printf '%s' "$arg" | grep -Eq '^#?[1-9][0-9]*$'; then
       pull_request_source="#$arg"
@@ -233,24 +213,6 @@ for arg in "$@"; do
     --commit=*)
       commit_ref="${arg#--commit=}"
       ;;
-    --plan)
-      expect_plan_file=1
-      ;;
-    --plan=*)
-      plan_file_path="${arg#--plan=}"
-      ;;
-    --plan-file)
-      expect_plan_file=1
-      ;;
-    --plan-file=*)
-      plan_file_path="${arg#--plan-file=}"
-      ;;
-    --plan-result-file)
-      expect_plan_result_file=1
-      ;;
-    --plan-result-file=*)
-      plan_result_file_path="${arg#--plan-result-file=}"
-      ;;
     -*)
       printf 'codiff: unknown option: %s\n' "$arg" >&2
       exit 1
@@ -274,11 +236,6 @@ for arg in "$@"; do
       ;;
   esac
 done
-
-if [ -n "$plan_file_path" ] && [ -n "$source_ref" ] && [ -z "$repository_path" ]; then
-  repository_path="$source_ref"
-  source_ref=""
-fi
 
 if [ -n "$source_ref" ] && [ -z "$commit_ref" ] && [ -z "$branch_ref" ]; then
   repository_context="${repository_path:-$PWD}"
@@ -313,24 +270,6 @@ esac
 
 
 
-if [ -n "$plan_file_path" ]; then
-  case "$plan_file_path" in
-    /*) ;;
-    *) plan_file_path="$PWD/$plan_file_path" ;;
-  esac
-  if [ ! -f "$plan_file_path" ] || ! printf '%s' "$plan_file_path" | grep -Eiq '\.md$'; then
-    printf '%s\n' "codiff: plan file not found or not Markdown: $plan_file_path" >&2
-    exit 1
-  fi
-fi
-
-if [ -n "$plan_result_file_path" ]; then
-  case "$plan_result_file_path" in
-    /*) ;;
-    *) plan_result_file_path="$PWD/$plan_result_file_path" ;;
-  esac
-fi
-
 if [ -n "$pull_request_branch" ]; then
   if ! pull_request_source="$(
     cd "$repository_path" 2>/dev/null &&
@@ -347,52 +286,11 @@ if [ -n "$pull_request_branch" ]; then
 fi
 
 open_codiff() {
-  # Prepend plan handoff options.
-  if [ -n "$plan_result_file_path" ]; then
-    set -- --plan-result-file "$plan_result_file_path" "$@"
-  fi
-  if [ -n "$plan_file_path" ]; then
-    set -- --plan-file "$plan_file_path" "$@"
-  fi
-
   open -n "$app_path" --args "$@"
 }
 
 
-if [ -n "$plan_file_path" ]; then
-  if [ -z "$plan_result_file_path" ]; then
-    plan_result_directory="$(mktemp -d "${TMPDIR:-/tmp}/codiff-plan-result.XXXXXX")"
-    plan_result_file_path="$plan_result_directory/result.json"
-    trap 'rm -rf "$plan_result_directory"' EXIT INT TERM
-  fi
-  open_codiff "$repository_path"
-  plan_open_attempts=0
-  plan_app_pid=""
-  while :; do
-    if [ -s "$plan_result_file_path" ]; then
-      if grep -Eq '"status"[[:space:]]*:[[:space:]]*"(done|closed)"' "$plan_result_file_path"; then
-        printf 'CODIFF_PLAN_RESULT '
-        cat "$plan_result_file_path"
-        exit 0
-      fi
-      if grep -Eq '"status"[[:space:]]*:[[:space:]]*"canceled"' "$plan_result_file_path"; then
-        exit 2
-      fi
-      if grep -Eq '"status"[[:space:]]*:[[:space:]]*"open"' "$plan_result_file_path"; then
-        plan_app_pid="$(sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$plan_result_file_path")"
-      fi
-    fi
-    if [ -n "$plan_app_pid" ] && ! kill -0 "$plan_app_pid" 2>/dev/null; then
-      exit 2
-    fi
-    plan_open_attempts=$((plan_open_attempts + 1))
-    if [ -z "$plan_app_pid" ] && [ "$plan_open_attempts" -ge 300 ]; then
-      printf '%s\n' "codiff: the app did not open the plan within 15 seconds." >&2
-      exit 1
-    fi
-    sleep 0.05
-  done
-elif [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ]; then
+if [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ]; then
   open_codiff "$pull_request_provider" "$pull_request_source" "$repository_path"
 elif [ -n "$pull_request_source" ]; then
   open_codiff "$pull_request_source" "$repository_path"

@@ -20,7 +20,7 @@ export type CodeQualityAnnotationMetadata = {
 
 type MarkdownPreviewAnnotationMetadata = {
   contents: string;
-  editing: boolean;
+
   layoutKey: string;
   oldContents?: string;
   path: string;
@@ -137,7 +137,7 @@ export type RepositoryLoadError = {
 
 export type CodeViewItemMetadata = {
   blockId: string;
-  canEditMarkdown: boolean;
+
   canRenderMarkdown: boolean;
   comments: ReadonlyArray<ReviewComment>;
   file: ChangedFile;

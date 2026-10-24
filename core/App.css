@@ -1,5 +1,4 @@
 @import '@nkzw/mdx-editor/styles.css';
-@import './walkthrough.css';
 
 @layer base {
   @font-face {
@@ -78,8 +77,7 @@
   }
 
   :root[data-theme='light'],
-  .app-shell[data-theme='light'],
-  .plan-shell[data-theme='light'] {
+  .app-shell[data-theme='light'] {
     --app-bg: #f8f8f6;
     --code-bg: #ffffff;
     --codiff-link: var(--tree-selection-focus);
@@ -106,8 +104,7 @@
   }
 
   :root[data-theme='dark'],
-  .app-shell[data-theme='dark'],
-  .plan-shell[data-theme='dark'] {
+  .app-shell[data-theme='dark'] {
     --app-bg: #141414;
     --code-bg: #1c1c1c;
     --codiff-link: var(--tree-selection-focus);
@@ -251,13 +248,6 @@
   overflow: hidden;
 }
 
-.plan-shell {
-  display: grid;
-  grid-template-rows: 40px minmax(0, 1fr);
-  height: 100%;
-  overflow: hidden;
-}
-
 .workspace-top-bar {
   -webkit-app-region: drag;
   align-items: center;
@@ -268,437 +258,9 @@
   height: 40px;
 }
 
-.plan-header {
-  padding: 0 14px 0 78px;
-}
-
 html[data-codiff-platform='darwin'] .workspace-top-bar {
   backdrop-filter: none;
   background: var(--sidebar-vibrancy-tint);
-}
-
-.shared-plan-shell {
-  height: 100dvh;
-}
-
-.shared-plan-shell .plan-header {
-  padding-left: 14px;
-}
-
-.plan-title {
-  color: var(--sidebar-text);
-  font: 600 12px/1.35 var(--font-mono);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plan-review.review {
-  container: plan-review / inline-size;
-  min-height: 0;
-  overflow: auto;
-}
-
-.plan-done-button {
-  justify-self: end;
-}
-
-.plan-actions {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  justify-self: end;
-}
-
-.plan-share-button {
-  gap: 5px;
-}
-
-.plan-save-error {
-  background: color-mix(in srgb, var(--danger) 12%, var(--code-bg));
-  border: 1px solid color-mix(in srgb, var(--danger) 36%, transparent);
-  border-radius: 12px;
-  color: var(--danger);
-  corner-shape: squircle;
-  font: 12px/1.4 var(--font-sans);
-  left: 50%;
-  max-width: min(520px, calc(100% - 32px));
-  padding: 8px 16px;
-  position: absolute;
-  top: 12px;
-  transform: translateX(-50%);
-  z-index: 10;
-}
-
-.plan-document.code-view {
-  contain: none;
-  flex: none;
-  height: auto;
-  min-height: 0;
-  overflow: visible;
-  padding-inline: 0;
-  padding-block: 14px 48px;
-  width: min(920px, 100%);
-}
-
-.plan-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 920px);
-  justify-content: center;
-  margin-inline: auto;
-  min-height: 100%;
-  min-width: min(100%, 920px);
-  padding-inline: 12px;
-  position: relative;
-  width: 100%;
-}
-
-.plan-workspace.with-comments {
-  column-gap: 0;
-  grid-template-columns: minmax(0, 920px) 360px;
-  justify-content: start;
-  min-width: 1304px;
-  width: max-content;
-}
-
-.plan-file-surface {
-  background: var(--code-bg);
-  border-radius: var(--codiff-diff-radius);
-  box-shadow:
-    0 0 0 1px var(--file-border),
-    6px 18px 80px -54px rgb(0 0 0 / 0.78);
-  corner-shape: squircle;
-  inline-size: 100%;
-  margin-inline: 0;
-  overflow: clip;
-}
-
-.plan-file-header {
-  grid-template-columns: minmax(0, 1fr) max-content;
-}
-
-.plan-file-actions {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-}
-
-.codiff-plan-editor {
-  --mdx-editor-annotation-active-bg: color-mix(in srgb, var(--sidebar-ref) 32%, transparent);
-  --mdx-editor-annotation-bg: color-mix(in srgb, var(--sidebar-ref) 22%, transparent);
-  --mdx-editor-font-size: 14px;
-  --mdx-editor-line-height: 1.55;
-  --mdx-editor-padding: 8px 12px;
-  --plan-comment-highlight-0: light-dark(rgb(198 125 0 / 0.24), rgb(245 190 66 / 0.24));
-  --plan-comment-highlight-0-active: light-dark(rgb(198 125 0 / 0.4), rgb(245 190 66 / 0.4));
-  --plan-comment-highlight-1: light-dark(rgb(40 112 205 / 0.22), rgb(91 166 255 / 0.24));
-  --plan-comment-highlight-1-active: light-dark(rgb(40 112 205 / 0.38), rgb(91 166 255 / 0.4));
-  --plan-comment-highlight-2: light-dark(rgb(29 135 71 / 0.22), rgb(80 200 120 / 0.22));
-  --plan-comment-highlight-2-active: light-dark(rgb(29 135 71 / 0.38), rgb(80 200 120 / 0.38));
-  --plan-comment-highlight-3: light-dark(rgb(190 48 104 / 0.2), rgb(244 114 182 / 0.22));
-  --plan-comment-highlight-3-active: light-dark(rgb(190 48 104 / 0.36), rgb(244 114 182 / 0.38));
-  --plan-comment-highlight-4: light-dark(rgb(112 70 184 / 0.2), rgb(190 140 255 / 0.22));
-  --plan-comment-highlight-4-active: light-dark(rgb(112 70 184 / 0.36), rgb(190 140 255 / 0.38));
-  --plan-comment-highlight-5: light-dark(rgb(204 73 34 / 0.2), rgb(255 132 92 / 0.22));
-  --plan-comment-highlight-5-active: light-dark(rgb(204 73 34 / 0.36), rgb(255 132 92 / 0.38));
-  --plan-comment-highlight-6: light-dark(rgb(13 130 133 / 0.22), rgb(65 205 200 / 0.22));
-  --plan-comment-highlight-6-active: light-dark(rgb(13 130 133 / 0.38), rgb(65 205 200 / 0.38));
-  --plan-comment-highlight-7: light-dark(rgb(101 113 24 / 0.22), rgb(190 205 80 / 0.22));
-  --plan-comment-highlight-7-active: light-dark(rgb(101 113 24 / 0.38), rgb(190 205 80 / 0.38));
-  display: block;
-}
-
-.codiff-plan-editor .mdx-editor-content {
-  background: var(--code-bg);
-  border: 0;
-  border-radius: 0 0 var(--codiff-diff-radius) var(--codiff-diff-radius);
-}
-
-.codiff-plan-editor .mdx-editor-content::selection,
-.codiff-plan-editor .mdx-editor-content *::selection {
-  background-color: var(--plan-comment-selection, var(--mdx-editor-selection));
-}
-
-.plan-comment-affordance {
-  background: transparent;
-  height: 24px;
-  left: var(--plan-comment-left);
-  position: absolute;
-  top: var(--plan-comment-top);
-  width: var(--plan-comment-width);
-  z-index: 6;
-}
-
-.plan-comment-add {
-  align-items: center;
-  background: var(--code-bg);
-  border: 1px solid color-mix(in srgb, var(--sidebar-ref) 42%, var(--file-border));
-  border-radius: 12px;
-  box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0) inset,
-    0 10px 32px -24px rgb(0 0 0 / 0);
-  color: var(--sidebar-ref);
-  corner-shape: squircle;
-  cursor: pointer;
-  display: inline-flex;
-  font: 600 18px/1 var(--font-sans);
-  height: 24px;
-  justify-content: center;
-  padding: 0 0 1px;
-  position: absolute;
-  right: 12px;
-  top: 0;
-  transform: translateY(-2px) scale(1);
-  transition:
-    background 160ms ease,
-    box-shadow 250ms ease,
-    transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  width: 24px;
-}
-
-.plan-comment-add:hover {
-  background: color-mix(in srgb, var(--sidebar-ref) 12%, var(--code-bg));
-  box-shadow:
-    0 10px 32px -24px rgb(0 0 0 / 0.92),
-    0 8px 20px -16px rgb(0 0 0 / 0.82);
-  transform: translateY(-2px) scale(1.08);
-}
-
-.plan-comment-add:active {
-  transform: translateY(-2px) scale(0.94);
-}
-
-.plan-comment-rail {
-  align-self: stretch;
-  min-height: var(--plan-comment-rail-min-height);
-  min-width: 0;
-  width: 360px;
-}
-
-.plan-comment-rail-scroll {
-  height: 100%;
-  min-height: inherit;
-  position: relative;
-}
-
-.plan-comment-position {
-  left: 0;
-  position: absolute;
-  right: 0;
-}
-
-.plan-comment-thread {
-  overflow: visible;
-  padding: 0;
-}
-
-.plan-comment-composer {
-  overflow: visible;
-}
-
-.plan-comment-thread > .plan-comment-composer.review-comment-thread {
-  padding: 0;
-}
-
-.plan-comment-composer .review-comment-body,
-.plan-comment-composer .review-comment-input {
-  min-inline-size: 0;
-  width: 100%;
-}
-
-.plan-comment-input.review-comment-input {
-  padding: 8px 12px;
-}
-
-.plan-comment-thread .review-comment-body {
-  background: var(--code-bg);
-}
-
-.plan-comment-thread.active .review-comment-body {
-  border-color: color-mix(in srgb, var(--sidebar-ref) 48%, var(--file-border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ref) 18%, transparent);
-}
-
-.plan-comment-message.editing > .review-comment-body {
-  border-color: color-mix(in srgb, var(--sidebar-ref) 48%, var(--file-border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ref) 18%, transparent);
-}
-
-.plan-comment-thread.resolved {
-  color: var(--muted);
-  opacity: 0.72;
-}
-
-.plan-comment-thread.resolved .review-comment-body {
-  background: color-mix(in srgb, var(--code-bg) 92%, var(--muted));
-}
-
-.plan-comment-thread.resolved .plan-comment-target {
-  display: block;
-}
-
-.plan-comment-header {
-  column-gap: 0;
-  grid-template-columns: minmax(0, 1fr) 26px;
-  padding-right: 0;
-}
-
-.plan-comment-header .review-comment-action {
-  height: 26px;
-}
-
-.plan-comment-heading {
-  align-items: baseline;
-  display: flex;
-  gap: 6px;
-  min-width: 0;
-}
-
-.plan-comment-status {
-  border: 1px solid color-mix(in srgb, var(--muted) 36%, transparent);
-  border-radius: 999px;
-  color: var(--muted);
-  flex: none;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 18px;
-  padding-inline: 7px;
-}
-
-.plan-comment-target {
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  cursor: pointer;
-  display: none;
-  font: inherit;
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plan-comment-target:hover {
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.plan-comment-target:focus-visible {
-  color: var(--text);
-  outline: 1px solid var(--sidebar-ref);
-  outline-offset: 2px;
-}
-
-.plan-comment-target:disabled {
-  color: var(--muted);
-  cursor: default;
-  opacity: 0.7;
-  text-decoration: none;
-}
-
-.plan-resolved-comments {
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: var(--plan-comment-resolved-top);
-}
-
-.plan-resolved-comments > summary {
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  list-style-position: inside;
-  padding-block: 8px;
-  padding-inline: 16px;
-  user-select: none;
-}
-
-.plan-resolved-comments > summary:hover {
-  color: var(--text);
-}
-
-.plan-resolved-comment-list {
-  display: grid;
-  gap: 8px;
-  padding: 0 0 8px;
-}
-
-@container plan-review (max-width: 1400px) {
-  .plan-workspace.with-comments {
-    gap: 0;
-    grid-template-areas: 'plan-content';
-    grid-template-columns: minmax(0, 920px);
-    justify-content: center;
-    min-width: min(100%, 920px);
-    width: 100%;
-  }
-
-  .plan-workspace.with-comments .plan-document {
-    grid-area: plan-content;
-    padding-bottom: calc(40dvh + 28px);
-  }
-
-  .plan-comment-rail {
-    background: var(--code-bg);
-    border: 1px solid var(--file-border);
-    border-radius: var(--codiff-diff-radius, 28px);
-    bottom: 12px;
-    box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.03) inset,
-      0 18px 64px -34px rgb(0 0 0 / 0.72);
-    corner-shape: squircle;
-    left: 50%;
-    max-height: 40dvh;
-    min-height: 0;
-    overflow: hidden;
-    position: fixed;
-    transform: translateX(-50%);
-    width: min(calc(100vw - 24px), 896px);
-    z-index: 7;
-  }
-
-  .plan-comment-rail-scroll {
-    display: grid;
-    gap: 0;
-    max-height: 40dvh;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 4px 8px;
-    scrollbar-gutter: stable;
-  }
-
-  .plan-comment-position {
-    position: static;
-  }
-
-  .plan-resolved-comments {
-    position: static;
-  }
-
-  .plan-resolved-comment-list {
-    padding-inline: 4px;
-  }
-
-  .plan-comment-thread.review-comment-thread {
-    padding: 8px 4px;
-  }
-
-  .plan-comment-target {
-    display: block;
-  }
-}
-
-.share-shell {
-  height: 100dvh;
-  min-height: 0;
-  width: 100vw;
 }
 
 .app-shell.sidebar-collapsed {
@@ -726,10 +288,6 @@ html[data-codiff-platform='darwin'] .workspace-top-bar {
   min-width: 0;
   padding: 0 14px 0 78px;
   position: relative;
-}
-
-.share-shell .review-top-bar {
-  padding-left: 14px;
 }
 
 .app-shell.window-fullscreen .review-top-bar {
@@ -1552,12 +1110,6 @@ html[data-codiff-platform='darwin'] .sidebar {
   white-space: nowrap;
 }
 
-.sidebar-commit-button {
-  flex: none;
-  color: var(--sidebar-text);
-  margin-left: auto;
-}
-
 .file-tree-shell,
 .file-tree {
   flex: 1;
@@ -1979,54 +1531,10 @@ html[data-codiff-platform='darwin'] .sidebar {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.codiff-source-description-header.editable-title {
-  grid-template-columns: 30px minmax(0, 1fr);
-}
-
-.codiff-source-description-title-cell {
-  align-items: center;
-  display: flex;
-  min-width: 0;
-  overflow: hidden;
-  padding-top: 4px;
-}
-
-.codiff-source-description-title-cell .codiff-file-heading,
-.codiff-source-description-title-cell .codiff-file-path-row {
-  flex: 1;
-  width: 100%;
-}
-
 .codiff-file-path.source-description-title {
   font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 600;
-}
-
-.source-description-title-editor {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  display: block;
-  box-sizing: border-box;
-  height: 28px;
-  line-height: 28px;
-  margin: 0;
-  min-width: 0;
-  outline: 0;
-  overflow: hidden;
-  padding: 0;
-  resize: none;
-  width: 100%;
-}
-
-.source-description-title-editor:focus-visible {
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--tree-selection-focus) 72%, transparent);
-}
-
-.source-description-title-editor.has-error {
-  box-shadow: inset 0 -1px 0 var(--danger, #ef4444);
 }
 
 .source-description-review-actions {
@@ -2164,14 +1672,6 @@ html[data-codiff-platform='darwin'] .sidebar {
 .source-description-markdown-editor .review-comment-input {
   font: 14px/1.55 var(--font-sans);
   min-height: 0;
-}
-
-.source-description-edit-shell.review-comment-edit-shell {
-  min-height: 0;
-}
-
-.source-description-edit-preview {
-  pointer-events: none;
 }
 
 .source-description-markdown-editor .mdx-editor-content > :last-child {
@@ -2406,12 +1906,6 @@ html[data-codiff-platform='darwin'] .sidebar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.general-comment-edit-actions {
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
 }
 
 .general-comment-input.review-comment-input {
@@ -2819,8 +2313,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 .codiff-markdown-document-editor,
 .codiff-markdown-preview-editor,
 .codiff-readonly-markdown-editor,
-.codiff-markdown-snapshot-editor,
-.codiff-plan-editor {
+.codiff-markdown-snapshot-editor {
   --mdx-editor-accent: var(--tree-selection-focus);
   --mdx-editor-accent-contrast: #fff;
   --mdx-editor-accent-soft: var(--tree-selection-bg);
@@ -2842,21 +2335,9 @@ html[data-codiff-platform='darwin'] .sidebar {
   --mdx-editor-padding: 8px 12px;
 }
 
-:is(
-  .codiff-markdown-document-editor,
-  .codiff-markdown-preview-editor,
-  .codiff-markdown-snapshot-editor,
-  .codiff-plan-editor,
-  .codiff-readonly-markdown-editor,
-  .review-comment-markdown-editor
-):is(.mdx-editor, .mdx-editor-persistent, .mdx-editor-shell) {
-  --mdx-editor-padding: 8px 12px;
-}
-
 .codiff-markdown-document-editor
   .mdx-editor-content
   li[role='checkbox'][aria-checked='true']::after,
-.codiff-plan-editor .mdx-editor-content li[role='checkbox'][aria-checked='true']::after,
 .review-comment-markdown-editor
   .mdx-editor-content
   li[role='checkbox'][aria-checked='true']::after {
@@ -3128,10 +2609,6 @@ html[data-codiff-platform='darwin'] .sidebar {
   min-width: 0;
 }
 
-.codiff-edit-revert-button {
-  width: 64px;
-}
-
 .compact-file-headers .codiff-file-header:has(.codiff-file-details) {
   gap: 6px;
   grid-auto-flow: row;
@@ -3204,7 +2681,6 @@ html[data-codiff-platform='darwin'] .sidebar {
 }
 
 .codiff-header-toggle,
-.codiff-source-description-collapse-button,
 .codiff-file-comment-button,
 .codiff-markdown-button,
 .codiff-button,
@@ -3266,12 +2742,6 @@ html[data-codiff-platform='darwin'] .sidebar {
   opacity: 0.4;
 }
 
-.codiff-button.plan-download-button {
-  height: 30px;
-  padding: 0;
-  width: 30px;
-}
-
 .codiff-copy-path-icon {
   display: block;
   flex: none;
@@ -3296,12 +2766,6 @@ html[data-codiff-platform='darwin'] .sidebar {
   color: var(--text);
 }
 
-.codiff-source-description-collapse-button {
-  height: 30px;
-  padding: 0;
-  width: 30px;
-}
-
 .codiff-chevron-box {
   align-items: center;
   border-radius: 15px;
@@ -3316,7 +2780,6 @@ html[data-codiff-platform='darwin'] .sidebar {
     :has(.codiff-copy-path-button:hover, .codiff-open-file-button:hover)
   )
   .codiff-chevron-box,
-.codiff-source-description-collapse-button:hover .codiff-chevron-box,
 .codiff-file-comment-button:hover,
 .codiff-markdown-button:hover,
 .codiff-button:hover:is(:not(:disabled), [data-autosaving]),
@@ -3876,11 +3339,6 @@ diffs-container .review-comment-thread {
   white-space: nowrap;
 }
 
-.review-comment-header .general-comment-edit-actions {
-  margin-left: auto;
-  overflow: visible;
-}
-
 .review-comment-header > .review-comment-action:first-of-type {
   margin-left: auto;
 }
@@ -4006,27 +3464,6 @@ diffs-container .review-comment-thread {
 
 .review-comment-markdown-editor .mdx-editor-content {
   min-height: 76px;
-}
-
-.review-comment-edit-shell {
-  min-height: 76px;
-  position: relative;
-}
-
-.review-comment-edit-shell.loading .review-comment-edit-editor {
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-}
-
-.review-comment-edit-shell.ready .review-comment-edit-editor {
-  opacity: 1;
-  position: relative;
-}
-
-.review-comment-edit-preview {
-  pointer-events: none;
 }
 
 .review-comment-markdown-editor [class*='_placeholder_'] {
@@ -4865,19 +4302,6 @@ diffs-container .review-comment-thread {
 }
 
 @media (max-width: 720px) {
-  .share-shell.sidebar-auto {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .share-shell.sidebar-auto .sidebar,
-  .share-shell.sidebar-auto .sidebar-resizer {
-    display: none;
-  }
-
-  .share-shell.sidebar-auto > .review {
-    grid-column: 1;
-  }
-
   .review-top-bar-repository-slot,
   .review-top-bar-center,
   .review-top-bar-context {
@@ -4893,12 +4317,6 @@ diffs-container .review-comment-thread {
   .review-mode-label {
     display: none;
   }
-}
-.codiff-code-edit-error {
-  padding: 8px 16px;
-  color: var(--danger);
-  background: var(--app-bg);
-  font-size: 12px;
 }
 
 /* Keep the project switcher available even in compact windows. */

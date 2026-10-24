@@ -953,7 +953,7 @@ function createTestContext({
     diffSearch: 'Mod+f',
     discardComment: 'Escape',
     doneEditing: 'Mod+s',
-    editFile: 'Mod+e',
+
     fileFilter: 'Mod+p',
     nextHunk: ['Ctrl+ArrowDown', 'j'],
     nextSearchMatch: 'Enter',

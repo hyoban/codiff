@@ -5,7 +5,6 @@ import { ChatCircleIcon as ChatCircle } from '@phosphor-icons/react/ChatCircle';
 import { CheckIcon as Check } from '@phosphor-icons/react/Check';
 import { ColumnsIcon as Columns } from '@phosphor-icons/react/Columns';
 import { ImageBrokenIcon as ImageBroken } from '@phosphor-icons/react/ImageBroken';
-import { PencilSimpleIcon as PencilSimple } from '@phosphor-icons/react/PencilSimple';
 import { SquareSplitVerticalIcon as SquareSplitVertical } from '@phosphor-icons/react/SquareSplitVertical';
 import { WarningOctagonIcon as WarningOctagon } from '@phosphor-icons/react/WarningOctagon';
 import { XIcon as X } from '@phosphor-icons/react/X';
@@ -20,12 +19,7 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import {
-  CodeView,
-  type CodeViewHandle,
-  EditProvider,
-  WorkerPoolContextProvider,
-} from '@pierre/diffs/react';
+import { CodeView, type CodeViewHandle, WorkerPoolContextProvider } from '@pierre/diffs/react';
 import { Copy as LucideCopy } from 'lucide-react';
 import {
   Fragment,
@@ -37,7 +31,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent as ReactChangeEvent,
   type ComponentProps,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -98,7 +91,6 @@ import {
   getReviewCommentLineLabel,
   getReviewCommentsDigest,
   hasActiveTextSelection,
-  isFileReviewComment,
   isInteractiveReviewEvent,
   isLineReviewComment,
   shouldDiscardReviewCommentOnEscape,
@@ -123,11 +115,6 @@ import type {
   ReviewAuthor,
   ReviewSource,
 } from '../../types.ts';
-import {
-  createCodeEditor,
-  useCodeEditing,
-  type CodeEditingStore,
-} from '../hooks/useCodeEditing.ts';
 import { useCodeViewAnnotations } from '../hooks/useCodeViewAnnotations.ts';
 import { useCodeViewPlaceholderFile } from '../hooks/useCodeViewPlaceholderFile.ts';
 import { Avatar } from './Avatar.tsx';
@@ -136,7 +123,6 @@ import { DefinitionPopover } from './DefinitionPopover.tsx';
 import { DiffLineCountBadge } from './DiffLineCountBadge.tsx';
 import { MarkdownEditor, preloadMarkdownEditor } from './LazyMarkdownEditor.tsx';
 import { MarkdownDiffView } from './MarkdownDiffView.tsx';
-import type { MarkdownDocumentEditorHandle } from './MarkdownDocumentEditor.tsx';
 import { ReadOnlyMarkdownView } from './ReadOnlyMarkdownView.tsx';
 import { ResolvedThreadDisclosure } from './ResolvedThreadDisclosure.tsx';
 import { useCopiedState } from './useCopiedState.ts';
@@ -156,20 +142,6 @@ function ReadOnlyMarkdown(props: ComponentProps<typeof PreviewDocument>) {
     </Suspense>
   );
 }
-const SourceDescriptionEditor = lazy(() => import('./SourceDescriptionEditor.tsx'));
-const RepositoryMarkdownEditor = lazy(async () => ({
-  default: (await import('./MarkdownDocumentEditor.tsx')).RepositoryMarkdownEditor,
-}));
-
-const isEditableWorkingTreeSection = (
-  sourceType: ReviewSource['type'],
-  file: ChangedFile,
-  section: DiffSection,
-) =>
-  (sourceType === 'working-tree' || sourceType === 'branch-working-tree') &&
-  file.status !== 'deleted' &&
-  file.sections.at(-1)?.id === section.id &&
-  (section.kind === 'staged' || section.kind === 'unstaged');
 
 function CopyFilePathButton({ path }: { path: string }) {
   const [copied, markCopied] = useCopiedState(1600);
@@ -209,46 +181,10 @@ function CopyFilePathButton({ path }: { path: string }) {
   );
 }
 
-function FileEditButton({
-  disabled,
-  isBusy,
-  item,
-  meta,
-  onEdit,
-  onPrepare,
-}: {
-  disabled: boolean;
-  isBusy: boolean;
-  item: CodeViewItem<ReviewAnnotationMetadata>;
-  meta: CodeViewItemMetadata;
-  onEdit: () => void;
-  onPrepare?: ReturnType<typeof useCodeEditing>['prepareEdit'];
-}) {
-  useEffect(() => {
-    // Headers only mount for rendered items. Warm visible files without loading
-    // every file in the review, and surface any preparation failure on click.
-    void onPrepare?.(item, meta).catch(() => {});
-  }, [item, meta, onPrepare]);
-
-  return (
-    <Button
-      aria-label={`Edit ${meta.file.path}`}
-      disabled={disabled || isBusy}
-      onClick={onEdit}
-      title="Edit working-tree file"
-      type="button"
-    >
-      <PencilSimple aria-hidden size={14} weight="bold" />
-      Edit
-    </Button>
-  );
-}
-
 function CodeViewHeader({
   allowViewedToggle,
   canCreateFileComment,
-  editActions,
-  isEditing = false,
+
   isSectionLoading,
   meta,
   onCreateFileComment,
@@ -261,8 +197,7 @@ function CodeViewHeader({
 }: {
   allowViewedToggle: boolean;
   canCreateFileComment: boolean;
-  editActions?: ReactNode;
-  isEditing?: boolean;
+
   isSectionLoading: boolean;
   meta: CodeViewItemMetadata;
   onCreateFileComment: () => void;
@@ -380,7 +315,7 @@ function CodeViewHeader({
           <Button
             aria-pressed={isMarkdownPreview}
             className={`codiff-markdown-button${isMarkdownPreview ? ' active' : ''}`}
-            disabled={isEditing && !isMarkdownPreview}
+
             onClick={() => onToggleMarkdownPreview(file, section)}
             title={isMarkdownPreview ? 'View as Diff' : 'View as Markdown'}
             type="button"
@@ -388,7 +323,7 @@ function CodeViewHeader({
             {isMarkdownPreview ? 'View as Diff' : 'View as Markdown'}
           </Button>
         ) : null}
-        {editActions}
+
         {canLoadSection && !readOnly ? (
           <button
             className="codiff-load-button"
@@ -439,11 +374,6 @@ function IdentityReviewAvatar({ identity }: { identity: GitIdentity | null }) {
   );
 }
 
-const canSubmitComment = (comment: ReviewComment) =>
-  !comment.isReadOnly &&
-  comment.body.trim().length > 0 &&
-  comment.remoteSubmit?.status !== 'submitting';
-
 const withCommentBody = (comment: ReviewComment, body: string): ReviewComment =>
   comment.body === body ? comment : { ...comment, body };
 
@@ -467,11 +397,11 @@ const formatBytes = (size: number) => {
 function MarkdownPreview({
   cacheKey,
   contents,
-  editing,
+
   heightCache,
   itemId,
   oldContents,
-  onEditorRef,
+
   onLayoutReady,
   onViewSource,
   path,
@@ -479,11 +409,11 @@ function MarkdownPreview({
 }: {
   cacheKey: string;
   contents: string;
-  editing: boolean;
+
   heightCache: Map<string, number>;
   itemId: string;
   oldContents?: string;
-  onEditorRef: (sectionId: string, editor: MarkdownDocumentEditorHandle | null) => void;
+
   onLayoutReady: (sectionId: string) => void;
   onViewSource: (lineNumber: number, side: 'additions' | 'deletions') => void;
   path: string;
@@ -535,15 +465,9 @@ function MarkdownPreview({
       data-codiff-markdown-item={itemId}
       style={{ minHeight: ready ? undefined : heightCache.get(cacheKey) }}
     >
-      <div className={`codiff-markdown-preview${editing ? ' editable' : ''}`} ref={contentRef}>
+      <div className={`codiff-markdown-preview${''}`} ref={contentRef}>
         <Suspense fallback={<div className="codiff-markdown-editor-message">Loading…</div>}>
-          {editing ? (
-            <RepositoryMarkdownEditor
-              onHeightChange={measure}
-              path={path}
-              ref={(editor) => onEditorRef(sectionId, editor)}
-            />
-          ) : oldContents != null ? (
+          {oldContents != null ? (
             <MarkdownDiffView
               newContents={contents}
               oldContents={oldContents}
@@ -588,122 +512,34 @@ const getCommitDescriptionAuthor = (author: CommitMetadata['author']): SourceDes
 const htmlCommentPattern = /<!--[\s\S]*?-->/g;
 const stripHtmlComments = (value: string) => value.replaceAll(htmlCommentPattern, '');
 type PullRequestSource = Extract<ReviewSource, { type: 'pull-request' }>;
-const sourceTitleUpdateDebounceMs = 800;
-
-function SourceDescriptionTitle({
-  canEdit,
-  label,
-  onUpdateTitle,
-  title,
-}: {
-  canEdit: boolean;
-  label: string;
-  onUpdateTitle?: (title: string) => Promise<void> | void;
-  title: string;
-}) {
-  const [draft, setDraft] = useState(title);
-  const [error, setError] = useState<string | null>(null);
-  const submittedTitleRef = useRef(title.trim());
-  const titleSavePromiseRef = useRef<Promise<void>>(Promise.resolve());
-  const trimmedDraft = draft.trim();
-
-  useEffect(() => {
-    if (!canEdit || !onUpdateTitle || !trimmedDraft || trimmedDraft === submittedTitleRef.current) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      const titleToSave = trimmedDraft;
-      const save = titleSavePromiseRef.current.then(() => onUpdateTitle(titleToSave));
-      titleSavePromiseRef.current = save.catch(() => {});
-      void save
-        .then(() => {
-          submittedTitleRef.current = titleToSave;
-        })
-        .catch((updateError: unknown) => {
-          setError(updateError instanceof Error ? updateError.message : String(updateError));
-        });
-    }, sourceTitleUpdateDebounceMs);
-    return () => window.clearTimeout(timeout);
-  }, [canEdit, onUpdateTitle, trimmedDraft]);
-
-  if (!canEdit || !onUpdateTitle) {
-    return (
-      <span className={`codiff-file-path${title ? ' source-description-title' : ''}`}>
-        {title || label}
-      </span>
-    );
-  }
-
-  return (
-    <textarea
-      aria-label="Edit title"
-      className={`codiff-file-path source-description-title source-description-title-editor${
-        error ? ' has-error' : ''
-      }`}
-      onBlur={() => {
-        if (!trimmedDraft) {
-          setDraft(title);
-          setError(null);
-        }
-      }}
-      onChange={(event: ReactChangeEvent<HTMLTextAreaElement>) => {
-        setDraft(event.target.value);
-        setError(null);
-      }}
-      onKeyDown={(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          setDraft(title);
-          setError(null);
-          event.currentTarget.blur();
-          return;
-        }
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          event.currentTarget.blur();
-        }
-      }}
-      rows={1}
-      spellCheck
-      title={error ?? undefined}
-      value={draft}
-      wrap="off"
-    />
-  );
-}
 
 // The PR/MR description is a file-style card matching commit details: the title lives in the
 // card header and the description is the collapsible body.
 function SourceDescriptionHeader({
   actions,
   canCollapse,
-  canEditTitle,
+
   isCollapsed,
   label,
   onToggleCollapsed,
-  onUpdateTitle,
+
   title,
 }: {
   actions?: ReactNode;
   canCollapse: boolean;
-  canEditTitle?: boolean;
+
   isCollapsed: boolean;
   label: string;
   onToggleCollapsed: () => void;
-  onUpdateTitle?: (title: string) => Promise<void> | void;
+
   title: string;
 }) {
-  const editableTitle = canEditTitle === true && onUpdateTitle != null && title.length > 0;
   const heading = (
     <span className="codiff-file-heading">
       <span className="codiff-file-path-row">
-        <SourceDescriptionTitle
-          canEdit={editableTitle}
-          label={label}
-          onUpdateTitle={onUpdateTitle}
-          title={title}
-        />
+        <span className={`codiff-file-path${title ? ' source-description-title' : ''}`}>
+          {title || label}
+        </span>
       </span>
     </span>
   );
@@ -712,30 +548,9 @@ function SourceDescriptionHeader({
     <div
       className={`codiff-file-header codiff-source-description-header${
         isCollapsed ? ' collapsed' : ''
-      }${editableTitle ? ' editable-title' : ''}`}
+      }${''}`}
     >
-      {canCollapse && editableTitle ? (
-        <>
-          <button
-            aria-expanded={!isCollapsed}
-            aria-label={isCollapsed ? 'Expand description' : 'Collapse description'}
-            className="codiff-source-description-collapse-button"
-            onClick={onToggleCollapsed}
-            title={isCollapsed ? 'Expand' : 'Collapse'}
-            type="button"
-          >
-            <span className="codiff-chevron-box">
-              <CaretDown
-                aria-hidden
-                className={isCollapsed ? 'codiff-chevron collapsed' : 'codiff-chevron'}
-                size={16}
-                weight="bold"
-              />
-            </span>
-          </button>
-          <div className="codiff-source-description-title-cell">{heading}</div>
-        </>
-      ) : canCollapse ? (
+      {canCollapse ? (
         <button
           aria-expanded={!isCollapsed}
           aria-label={isCollapsed ? 'Expand description' : 'Collapse description'}
@@ -754,8 +569,6 @@ function SourceDescriptionHeader({
           </span>
           {heading}
         </button>
-      ) : editableTitle ? (
-        <div className="codiff-source-description-title-cell">{heading}</div>
       ) : (
         <div className="codiff-header-toggle codiff-header-toggle-static">{heading}</div>
       )}
@@ -767,237 +580,39 @@ function SourceDescriptionHeader({
 function SourceDescriptionBody({
   ariaLabel = 'Preview source description',
   author,
-  canEdit,
   description,
-  keymap,
   layoutKey,
   onLayoutReady,
-  onUpdateDescription,
-  onUploadDescriptionAsset,
 }: {
   ariaLabel?: string;
   author?: SourceDescriptionAuthor;
-  canEdit?: boolean;
   description: string;
-  keymap?: CodiffKeymap;
   layoutKey: string;
-  onLayoutReady: (layoutKey: string) => void;
-  onUpdateDescription?: (body: string) => Promise<void> | void;
-  onUploadDescriptionAsset?: (file: File) => Promise<string> | string;
+  onLayoutReady: (key: string) => void;
 }) {
-  useLayoutEffect(() => {
-    onLayoutReady(layoutKey);
-  }, [layoutKey, onLayoutReady]);
-  const canEditDescription = canEdit === true && onUpdateDescription != null;
-  const [editDraft, setEditDraft] = useState(description);
-  const [editEditorReady, setEditEditorReady] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [savedDescription, setSavedDescription] = useState<{
-    body: string;
-    previousDescription: string;
-  } | null>(null);
-  const displayedDescription =
-    savedDescription != null && description === savedDescription.previousDescription
-      ? savedDescription.body
-      : description;
-  const sanitizedDescription = useMemo(
-    () => sanitizeMarkdownImages(stripHtmlComments(displayedDescription)),
-    [displayedDescription],
-  );
-  const editorRef = useRef<MarkdownEditorHandle | null>(null);
-  const canSaveEdit =
-    editing && !editSubmitting && editDraft.trim() !== displayedDescription.trim();
-
-  const setEditorRef = useCallback(
-    (editor: MarkdownEditorHandle | null) => {
-      editorRef.current = editor;
-      if (editor && editing) {
-        requestAnimationFrame(() => {
-          setEditEditorReady(true);
-          editor.focus({ defaultSelection: 'rootEnd', preventScroll: true });
-        });
-      }
-    },
-    [editing],
-  );
-
-  useEffect(() => {
-    if (!editing) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      editorRef.current?.focus({ defaultSelection: 'rootEnd', preventScroll: true });
-    });
-  }, [editing]);
-
-  const startEdit = useCallback(() => {
-    if (!canEditDescription || editSubmitting) {
-      return;
-    }
-
-    setEditDraft(displayedDescription);
-    setEditEditorReady(false);
-    setEditError(null);
-    setEditing(true);
-    preloadMarkdownEditor();
-  }, [canEditDescription, displayedDescription, editSubmitting]);
-
-  const cancelEdit = useCallback(() => {
-    if (editSubmitting) {
-      return;
-    }
-
-    setEditDraft(displayedDescription);
-    setEditEditorReady(false);
-    setEditError(null);
-    setEditing(false);
-  }, [displayedDescription, editSubmitting]);
-
-  const saveEdit = useCallback(() => {
-    const body = editDraft.trim();
-    if (!canEditDescription || editSubmitting || body === displayedDescription.trim()) {
-      return;
-    }
-
-    setEditError(null);
-    setEditSubmitting(true);
-    void Promise.resolve(onUpdateDescription(body))
-      .then(() => {
-        setSavedDescription({ body, previousDescription: displayedDescription });
-        setEditDraft(body);
-        setEditEditorReady(false);
-        setEditing(false);
-      })
-      .catch((error: unknown) => {
-        setEditError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => setEditSubmitting(false));
-  }, [canEditDescription, displayedDescription, editDraft, editSubmitting, onUpdateDescription]);
-
-  const handleEditKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (!keymap || !matchesShortcut(event, keymap, 'submitComment') || !canSaveEdit) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      saveEdit();
-    },
-    [canSaveEdit, keymap, saveEdit],
-  );
-
+  useLayoutEffect(() => onLayoutReady(layoutKey), [layoutKey, onLayoutReady]);
+  const content = sanitizeMarkdownImages(stripHtmlComments(description));
   return (
     <div
-      className={`source-description-comment review-comment${
-        author ? '' : ' source-description-comment-anonymous'
-      }`}
+      className={`source-description-comment review-comment${author ? '' : ' source-description-comment-anonymous'}`}
     >
       {author ? <Avatar name={author.displayName} size="medium" url={author.avatarUrl} /> : null}
       <div className="review-comment-body source-description-body">
-        {author || canEditDescription || editing ? (
+        {author ? (
           <div
-            className={`review-comment-header read-only source-description-author-header${
-              canEditDescription || editing ? ' with-comment-action' : ''
-            }${!sanitizedDescription && !editing ? ' without-description' : ''}`}
+            className={`review-comment-header read-only source-description-author-header${content ? '' : ' without-description'}`}
           >
-            <strong title={author?.title}>{author ? author.displayName : 'Description'}</strong>
-            {editing ? (
-              <span className="general-comment-edit-actions">
-                <button
-                  className="review-comment-action"
-                  disabled={editSubmitting}
-                  onClick={cancelEdit}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="review-comment-action"
-                  disabled={!canSaveEdit}
-                  onClick={saveEdit}
-                  type="button"
-                >
-                  {editSubmitting ? 'Saving' : 'Save'}
-                </button>
-              </span>
-            ) : canEditDescription ? (
-              <button
-                className="review-comment-action"
-                onClick={startEdit}
-                onFocus={preloadMarkdownEditor}
-                onPointerEnter={preloadMarkdownEditor}
-                type="button"
-              >
-                Edit
-              </button>
-            ) : null}
+            <strong title={author.title}>{author.displayName}</strong>
           </div>
         ) : null}
-        {editing ? (
-          <>
-            <div>
-              <Suspense
-                fallback={
-                  <ReadOnlyMarkdown
-                    ariaLabel={ariaLabel}
-                    className="codiff-markdown-preview-editor source-description-markdown-editor source-description-edit-preview"
-                    density="compact"
-                    onHeightChange={() => onLayoutReady(layoutKey)}
-                    value={sanitizedDescription}
-                    variant="embedded"
-                  />
-                }
-              >
-                <div
-                  className={`review-comment-edit-shell source-description-edit-shell${
-                    editEditorReady ? ' ready' : ' loading'
-                  }`}
-                >
-                  {!editEditorReady ? (
-                    <ReadOnlyMarkdown
-                      ariaLabel={ariaLabel}
-                      className="codiff-markdown-preview-editor source-description-markdown-editor source-description-edit-preview"
-                      density="compact"
-                      onHeightChange={() => onLayoutReady(layoutKey)}
-                      value={sanitizedDescription}
-                      variant="embedded"
-                    />
-                  ) : null}
-                  <div className="review-comment-edit-editor">
-                    <SourceDescriptionEditor
-                      ariaLabel="Edit source description"
-                      className="review-comment-markdown-editor general-comment-markdown-editor source-description-markdown-editor"
-                      colorScheme="inherit"
-                      contentClassName="review-comment-input general-comment-input"
-                      density="compact"
-                      onChange={setEditDraft}
-                      onHeightChange={() => onLayoutReady(layoutKey)}
-                      onKeyDown={handleEditKeyDown}
-                      onUploadAsset={onUploadDescriptionAsset}
-                      readOnly={editSubmitting}
-                      ref={setEditorRef}
-                      spellCheck
-                      value={editDraft}
-                      variant="embedded"
-                    />
-                  </div>
-                </div>
-              </Suspense>
-            </div>
-            {editError ? <div className="review-comment-error">{editError}</div> : null}
-          </>
-        ) : sanitizedDescription ? (
+        {content ? (
           <div className="codiff-markdown-preview source-description-markdown">
             <ReadOnlyMarkdown
               ariaLabel={ariaLabel}
               className="codiff-markdown-preview-editor source-description-markdown-editor"
               density="compact"
               onHeightChange={() => onLayoutReady(layoutKey)}
-              value={sanitizedDescription}
+              value={content}
               variant="embedded"
             />
           </div>
@@ -1011,58 +626,50 @@ export function PullRequestSourceDescription({
   actions,
   footer,
   keymap,
-  onUpdateDescription,
-  onUpdateTitle,
-  onUploadDescriptionAsset,
+
   source,
 }: {
   actions?: ReactNode;
   footer?: ReactNode;
   keymap?: CodiffKeymap;
-  onUpdateDescription?: (body: string) => Promise<void> | void;
-  onUpdateTitle?: (title: string) => Promise<void> | void;
-  onUploadDescriptionAsset?: (file: File) => Promise<string> | string;
+
   source: PullRequestSource;
 }) {
   const sourceDescription = source.description?.trim() ?? '';
   const sourceTitle = source.title?.trim() ?? '';
   const sourceDescriptionHasBody = sourceDescription.length > 0;
   const sourceAuthor = source.author ? getPullRequestDescriptionAuthor(source.author) : undefined;
-  const canEditDescription = source.canEditDescription === true && onUpdateDescription != null;
-  const canEditTitle =
-    (source.canEditTitle === true || source.canEditDescription === true) && onUpdateTitle != null;
+
   const [collapsed, setCollapsed] = useState(false);
 
   if (!sourceDescription && !sourceTitle) {
     return null;
   }
 
-  const isCollapsed = (!sourceDescriptionHasBody && !canEditDescription) || collapsed;
+  const isCollapsed = !sourceDescriptionHasBody || collapsed;
   const layoutKey = `source-description-panel:${source.provider ?? ''}:${source.url}:${sourceTitle}:${sourceDescription}:${source.author?.login ?? ''}:${source.author?.avatarUrl ?? ''}:${isCollapsed ? 'collapsed' : 'open'}`;
 
   return (
     <div className="codiff-source-description-panel">
       <SourceDescriptionHeader
         actions={actions}
-        canCollapse={sourceDescriptionHasBody || canEditDescription}
-        canEditTitle={canEditTitle}
+        canCollapse={sourceDescriptionHasBody}
+
         isCollapsed={isCollapsed}
         label={getPullRequestDescriptionLabel(source)}
         onToggleCollapsed={() => setCollapsed((current) => !current)}
-        onUpdateTitle={onUpdateTitle}
+
         title={sourceTitle}
       />
       {!isCollapsed ? (
         <div className="codiff-source-description-panel-body">
           <SourceDescriptionBody
             author={sourceAuthor}
-            canEdit={canEditDescription}
+
             description={sourceDescription}
-            keymap={keymap}
+
             layoutKey={layoutKey}
             onLayoutReady={() => {}}
-            onUpdateDescription={onUpdateDescription}
-            onUploadDescriptionAsset={onUploadDescriptionAsset}
           />
           {footer ? <div className="codiff-source-description-footer">{footer}</div> : null}
         </div>
@@ -1340,10 +947,8 @@ function ReviewCommentEditor({
   onCommentDraftChange,
   onCommentFocus,
   onDeleteComment,
-  onSaveCommentEdit,
-  onSubmitComment,
+
   onUpdateComment,
-  supportsReviewCommentActions,
 }: {
   comment: ReviewComment;
   displayName: string;
@@ -1356,23 +961,9 @@ function ReviewCommentEditor({
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
   onDeleteComment: (commentId: string) => void;
-  onSaveCommentEdit: (commentId: string, body: string) => Promise<void> | void;
-  onSubmitComment: (commentId: string) => void;
+
   onUpdateComment: (commentId: string, body: string) => void;
-  supportsReviewCommentActions: boolean;
 }) {
-  const [editState, setEditState] = useState(() => ({
-    commentId: comment.id,
-    draft: comment.body,
-    editing: false,
-    error: null as string | null,
-    submitting: false,
-  }));
-  const [editEditorReadyState, setEditEditorReadyState] = useState(() => ({
-    commentId: comment.id,
-    ready: false,
-  }));
-  const [savedBody, setSavedBody] = useState<{ body: string; commentId: string } | null>(null);
   const [draftState, setDraftState] = useState(() => ({
     commentBody: comment.body,
     commentId: comment.id,
@@ -1392,67 +983,9 @@ function ReviewCommentEditor({
     !effectiveDraftState.dirty && effectiveDraftState.commentBody !== comment.body
       ? comment.body
       : effectiveDraftState.draft;
-  const displayedBody =
-    savedBody?.commentId === comment.id && comment.body !== savedBody.body
-      ? savedBody.body
-      : comment.body;
-  const effectiveEditState =
-    editState.commentId === comment.id
-      ? editState
-      : {
-          commentId: comment.id,
-          draft: displayedBody,
-          editing: false,
-          error: null,
-          submitting: false,
-        };
-  const editingExistingComment = effectiveEditState.editing;
-  const editDraft = effectiveEditState.draft;
-  const editError = effectiveEditState.error;
-  const editSubmitting = effectiveEditState.submitting;
-  const editEditorReady =
-    editEditorReadyState.commentId === comment.id && editEditorReadyState.ready;
 
   const draftComment = withCommentBody(comment, draft);
 
-  const commentCanSubmit = canSubmitComment(draftComment);
-  const canEditExistingComment =
-    supportsReviewCommentActions && comment.isReadOnly && comment.canEdit === true;
-  const canSaveEdit =
-    canEditExistingComment &&
-    !editSubmitting &&
-    Boolean(editDraft.trim()) &&
-    editDraft.trim() !== displayedBody.trim();
-  const editEditorRef = useRef<MarkdownEditorHandle | null>(null);
-
-  const setEditEditorRef = useCallback(
-    (editor: MarkdownEditorHandle | null) => {
-      editEditorRef.current = editor;
-      if (editor && editingExistingComment) {
-        requestAnimationFrame(() => {
-          setEditEditorReadyState({ commentId: comment.id, ready: true });
-          editor.focus({ defaultSelection: 'rootEnd', preventScroll: true });
-        });
-      }
-    },
-    [comment.id, editingExistingComment],
-  );
-  const handleEditDraftChange = useCallback(
-    (draft: string) => {
-      setEditState((current) =>
-        current.commentId === comment.id
-          ? { ...current, draft }
-          : {
-              commentId: comment.id,
-              draft,
-              editing: true,
-              error: null,
-              submitting: false,
-            },
-      );
-    },
-    [comment.id],
-  );
   const flushDraft = useCallback(() => {
     setDraftState((current) =>
       current.commentId === comment.id
@@ -1487,92 +1020,6 @@ function ReviewCommentEditor({
     [comment.body, comment.id, onCommentDraftChange],
   );
 
-  const handleSubmitComment = useCallback(() => {
-    const flushed = flushDraft();
-    if (canSubmitComment(flushed)) {
-      onSubmitComment(comment.id);
-    }
-  }, [comment.id, flushDraft, onSubmitComment]);
-
-  const handleStartEdit = useCallback(() => {
-    if (!canEditExistingComment || editSubmitting) {
-      return;
-    }
-
-    setEditState({
-      commentId: comment.id,
-      draft: displayedBody,
-      editing: true,
-      error: null,
-      submitting: false,
-    });
-    setEditEditorReadyState({ commentId: comment.id, ready: false });
-  }, [canEditExistingComment, comment.id, displayedBody, editSubmitting]);
-
-  const handleCancelEdit = useCallback(() => {
-    if (editSubmitting) {
-      return;
-    }
-
-    setEditState({
-      commentId: comment.id,
-      draft: displayedBody,
-      editing: false,
-      error: null,
-      submitting: false,
-    });
-    setEditEditorReadyState({ commentId: comment.id, ready: false });
-  }, [comment.id, displayedBody, editSubmitting]);
-
-  const handleSaveEdit = useCallback(() => {
-    const body = editDraft.trim();
-    if (!canEditExistingComment || !body || editSubmitting || body === displayedBody.trim()) {
-      return;
-    }
-
-    setEditState({
-      commentId: comment.id,
-      draft: editDraft,
-      editing: true,
-      error: null,
-      submitting: true,
-    });
-    void Promise.resolve(onSaveCommentEdit(comment.id, body))
-      .then(() => {
-        setSavedBody({ body, commentId: comment.id });
-        setEditState({
-          commentId: comment.id,
-          draft: body,
-          editing: false,
-          error: null,
-          submitting: false,
-        });
-      })
-      .catch((error: unknown) => {
-        setEditState({
-          commentId: comment.id,
-          draft: editDraft,
-          editing: true,
-          error: error instanceof Error ? error.message : String(error),
-          submitting: false,
-        });
-      })
-      .finally(() => {
-        setEditState((current) =>
-          current.commentId === comment.id && current.submitting
-            ? { ...current, submitting: false }
-            : current,
-        );
-      });
-  }, [
-    canEditExistingComment,
-    comment.id,
-    displayedBody,
-    editDraft,
-    editSubmitting,
-    onSaveCommentEdit,
-  ]);
-
   const handleBlur = useCallback(() => {
     onCommentBlur(comment, draft, flushDraft);
   }, [comment, draft, flushDraft, onCommentBlur]);
@@ -1589,31 +1036,9 @@ function ReviewCommentEditor({
     onCommentFocus(draftComment);
   }, [draftComment, onCommentFocus]);
 
-  const handleEditKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (!matchesShortcut(event, keymap, 'submitComment') || !canSaveEdit) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      handleSaveEdit();
-    },
-    [canSaveEdit, handleSaveEdit, keymap],
-  );
-
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (matchesShortcut(event, keymap, 'submitComment')) {
-        if (supportsReviewCommentActions) {
-          if (commentCanSubmit) {
-            event.preventDefault();
-            event.stopPropagation();
-            handleSubmitComment();
-          }
-          return;
-        }
-
         event.preventDefault();
         event.stopPropagation();
         handleAddComment();
@@ -1636,16 +1061,13 @@ function ReviewCommentEditor({
       }
     },
     [
-      commentCanSubmit,
       comment.id,
       comment.isReadOnly,
       draft,
       handleAddComment,
 
-      handleSubmitComment,
       keymap,
       onDeleteComment,
-      supportsReviewCommentActions,
     ],
   );
   return (
@@ -1657,78 +1079,12 @@ function ReviewCommentEditor({
           <IdentityReviewAvatar identity={identity} />
         )}
         <div className="review-comment-body">
-          <div
-            className={`review-comment-header${
-              (supportsReviewCommentActions && !comment.isReadOnly) ||
-              canEditExistingComment ||
-              comment.canDelete ||
-              editingExistingComment
-                ? ' with-comment-action'
-                : ''
-            }${comment.isReadOnly ? ' read-only' : ''}`}
-          >
+          <div className="review-comment-header">
             <strong>{displayName}</strong>
-            {editingExistingComment ? (
-              <span className="general-comment-edit-actions">
-                <button
-                  className="review-comment-action"
-                  disabled={editSubmitting}
-                  onClick={handleCancelEdit}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="review-comment-action"
-                  disabled={!canSaveEdit}
-                  onClick={handleSaveEdit}
-                  type="button"
-                >
-                  {editSubmitting ? 'Saving' : 'Save'}
-                </button>
-              </span>
-            ) : canEditExistingComment ? (
-              <button
-                className="review-comment-action"
-                onClick={handleStartEdit}
-                onFocus={preloadMarkdownEditor}
-                onPointerEnter={preloadMarkdownEditor}
-                type="button"
-              >
-                Edit
-              </button>
-            ) : null}
-            {comment.isReadOnly && comment.canDelete ? (
-              <button
-                aria-label="Delete comment"
-                className="review-comment-delete"
-                onClick={() => onDeleteComment(comment.id)}
-                title="Delete comment"
-                type="button"
-              >
-                <X aria-hidden className="review-comment-delete-icon" size={14} weight="bold" />
-              </button>
-            ) : null}
+            {null}
+            {null}
 
-            {supportsReviewCommentActions && !comment.isReadOnly ? (
-              <button
-                className="review-comment-action"
-                disabled={!commentCanSubmit}
-                onClick={handleSubmitComment}
-                title={
-                  commentCanSubmit ? 'Submit review comment' : 'Write a note before commenting'
-                }
-                type="button"
-              >
-                <ChatCircle
-                  aria-hidden
-                  className="review-comment-action-icon"
-                  size={14}
-                  weight="bold"
-                />
-                {comment.remoteSubmit?.status === 'submitting' ? 'Sending' : 'Comment'}
-              </button>
-            ) : null}
+            {null}
             {!comment.isReadOnly ? (
               <button
                 aria-label="Delete comment"
@@ -1741,66 +1097,13 @@ function ReviewCommentEditor({
               </button>
             ) : null}
           </div>
-          {editingExistingComment ? (
-            <>
-              <Suspense
-                fallback={
-                  <ReadOnlyMarkdownView
-                    ariaLabel={`Comment on ${comment.filePath} ${getReviewCommentLineLabel(
-                      comment,
-                    )}`}
-                    className="review-comment-markdown-editor"
-                    contentClassName="review-comment-input read-only"
-                    fallback={<div className="review-comment-input read-only" />}
-                    value={displayedBody}
-                    variant="embedded"
-                  />
-                }
-              >
-                <div
-                  className={`review-comment-edit-shell${editEditorReady ? ' ready' : ' loading'}`}
-                >
-                  {!editEditorReady ? (
-                    <ReadOnlyMarkdownView
-                      ariaLabel={`Comment on ${comment.filePath} ${getReviewCommentLineLabel(
-                        comment,
-                      )}`}
-                      className="review-comment-markdown-editor review-comment-edit-preview"
-                      contentClassName="review-comment-input read-only"
-                      fallback={<div className="review-comment-input read-only" />}
-                      value={displayedBody}
-                      variant="embedded"
-                    />
-                  ) : null}
-                  <div className="review-comment-edit-editor">
-                    <MarkdownEditor
-                      ariaLabel={`Edit comment on ${comment.filePath} ${getReviewCommentLineLabel(
-                        comment,
-                      )}`}
-                      className="review-comment-markdown-editor"
-                      colorScheme="inherit"
-                      contentClassName="review-comment-input"
-                      density="compact"
-                      onChange={handleEditDraftChange}
-                      onKeyDown={handleEditKeyDown}
-                      readOnly={editSubmitting}
-                      ref={setEditEditorRef}
-                      spellCheck
-                      value={editDraft}
-                      variant="embedded"
-                    />
-                  </div>
-                </div>
-              </Suspense>
-              {editError ? <div className="review-comment-error">{editError}</div> : null}
-            </>
-          ) : comment.isReadOnly ? (
+          {comment.isReadOnly ? (
             <ReadOnlyMarkdownView
               ariaLabel={`Comment on ${comment.filePath} ${getReviewCommentLineLabel(comment)}`}
               className="review-comment-markdown-editor"
               contentClassName="review-comment-input read-only"
               fallback={<div className="review-comment-input read-only" />}
-              value={displayedBody}
+              value={comment.body}
               variant="embedded"
             />
           ) : (
@@ -1823,9 +1126,7 @@ function ReviewCommentEditor({
               />
             </Suspense>
           )}
-          {comment.remoteSubmit?.status === 'error' ? (
-            <div className="review-comment-error">{comment.remoteSubmit.error}</div>
-          ) : null}
+          {null}
         </div>
       </div>
     </Fragment>
@@ -1854,8 +1155,6 @@ const groupReviewCommentsByThread = (comments: ReadonlyArray<ReviewComment>) => 
   return groups;
 };
 
-const noopResolveThread = () => {};
-
 // The CodeView header host is measured by a ResizeObserver, so no manual
 // layout pass is needed when the description body settles.
 const noopLayoutReady = () => {};
@@ -1872,12 +1171,8 @@ function ReviewCommentThreadGroup({
   onCommentDraftChange,
   onCommentFocus,
   onDeleteComment,
-  onReplyToThread,
-  onResolveThread = noopResolveThread,
-  onSaveCommentEdit,
-  onSubmitComment,
+
   onUpdateComment,
-  supportsReviewCommentActions,
 }: {
   comments: ReadonlyArray<ReviewComment>;
   focusCommentId: string | null;
@@ -1890,70 +1185,14 @@ function ReviewCommentThreadGroup({
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
   onDeleteComment: (commentId: string) => void;
-  onReplyToThread: (threadId: string, comment: ReviewComment) => void;
-  onResolveThread?: (threadId: string, resolved: boolean) => Promise<void> | void;
-  onSaveCommentEdit: (commentId: string, body: string) => Promise<void> | void;
-  onSubmitComment: (commentId: string) => void;
+
   onUpdateComment: (commentId: string, body: string) => void;
-  supportsReviewCommentActions: boolean;
 }) {
-  const [resolveState, setResolveState] = useState<{
-    error: string | null;
-    submitting: boolean;
-    threadId: string | null;
-  }>({ error: null, submitting: false, threadId: null });
-  const lastComment = comments.at(-1);
-  const threadId = lastComment?.threadId;
   const threadResolved = comments.some((comment) => comment.isThreadResolved === true);
   const hasFocusedComment =
     focusCommentId != null && comments.some((comment) => comment.id === focusCommentId);
-  const [resolutionOverride, setResolutionOverride] = useState<{
-    base: boolean;
-    value: boolean;
-  } | null>(null);
-  const effectiveThreadResolved =
-    resolutionOverride?.base === threadResolved ? resolutionOverride.value : threadResolved;
-  const resolving = resolveState.threadId === threadId && resolveState.submitting;
-  const canResolveThread =
-    supportsReviewCommentActions &&
-    threadId != null &&
-    comments.some((comment) => comment.canResolveThread === true);
-  const canReplyToThread =
-    supportsReviewCommentActions &&
-    threadId != null &&
-    comments.some((comment) => comment.isReadOnly) &&
-    !comments.some((comment) => !comment.isReadOnly) &&
-    !comments.some((comment) => comment.canReplyThread === false) &&
-    !effectiveThreadResolved &&
-    !resolving;
-  const hasThreadActions = canReplyToThread || canResolveThread;
-  const resolveError = resolveState.threadId === threadId ? resolveState.error : null;
 
-  const handleReply = useCallback(() => {
-    if (!threadId || !lastComment) {
-      return;
-    }
-    onReplyToThread(threadId, lastComment);
-  }, [lastComment, onReplyToThread, threadId]);
-
-  const handleResolve = useCallback(() => {
-    if (!threadId || resolving) {
-      return;
-    }
-    const nextResolved = !effectiveThreadResolved;
-    setResolutionOverride({ base: threadResolved, value: nextResolved });
-    setResolveState({ error: null, submitting: true, threadId });
-    void Promise.resolve(onResolveThread(threadId, nextResolved))
-      .then(() => setResolveState({ error: null, submitting: false, threadId }))
-      .catch((error: unknown) => {
-        setResolutionOverride(null);
-        setResolveState({
-          error: error instanceof Error ? error.message : String(error),
-          submitting: false,
-          threadId,
-        });
-      });
-  }, [effectiveThreadResolved, onResolveThread, resolving, threadId, threadResolved]);
+  const effectiveThreadResolved = threadResolved;
 
   const threadContent = (
     <>
@@ -1976,37 +1215,12 @@ function ReviewCommentThreadGroup({
             onCommentDraftChange={onCommentDraftChange}
             onCommentFocus={onCommentFocus}
             onDeleteComment={onDeleteComment}
-            onSaveCommentEdit={onSaveCommentEdit}
-            onSubmitComment={onSubmitComment}
+
             onUpdateComment={onUpdateComment}
-            supportsReviewCommentActions={supportsReviewCommentActions}
           />
         );
       })}
-      {hasThreadActions ? (
-        <div className="review-comment-thread-footer">
-          {resolveError ? (
-            <span className="review-comment-thread-error">{resolveError}</span>
-          ) : null}
-          <div className="review-comment-thread-actions">
-            {canReplyToThread ? (
-              <button className="review-comment-action" onClick={handleReply} type="button">
-                Reply
-              </button>
-            ) : null}
-            {canResolveThread ? (
-              <button
-                className="review-comment-action"
-                disabled={resolving}
-                onClick={handleResolve}
-                type="button"
-              >
-                {resolving ? 'Saving' : effectiveThreadResolved ? 'Reopen' : 'Resolve'}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {null}
     </>
   );
 
@@ -2015,8 +1229,6 @@ function ReviewCommentThreadGroup({
       commentCount={comments.length}
       focused={hasFocusedComment}
       focusRequest={focusCommentRequest}
-      initialExpanded={Boolean(resolveError)}
-      saving={resolving}
     >
       {threadContent}
     </ResolvedThreadDisclosure>
@@ -2038,12 +1250,8 @@ function ReviewAnnotation({
   onCommentFocus,
   onDeleteComment,
   onHeightChange,
-  onReplyToThread,
-  onResolveThread = noopResolveThread,
-  onSaveCommentEdit,
-  onSubmitComment,
+
   onUpdateComment,
-  supportsReviewCommentActions,
 }: {
   annotation: DiffLineAnnotation<ReviewCommentAnnotationMetadata>;
   comments: ReadonlyArray<ReviewComment>;
@@ -2057,12 +1265,8 @@ function ReviewAnnotation({
   onCommentFocus: (comment: ReviewComment) => void;
   onDeleteComment: (commentId: string) => void;
   onHeightChange: () => void;
-  onReplyToThread: (threadId: string, comment: ReviewComment) => void;
-  onResolveThread?: (threadId: string, resolved: boolean) => Promise<void> | void;
-  onSaveCommentEdit: (commentId: string, body: string) => Promise<void> | void;
-  onSubmitComment: (commentId: string) => void;
+
   onUpdateComment: (commentId: string, body: string) => void;
-  supportsReviewCommentActions: boolean;
 }) {
   const focusEditorRef = useRef<MarkdownEditorHandle>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -2121,12 +1325,8 @@ function ReviewAnnotation({
           onCommentDraftChange={onCommentDraftChange}
           onCommentFocus={onCommentFocus}
           onDeleteComment={onDeleteComment}
-          onReplyToThread={onReplyToThread}
-          onResolveThread={onResolveThread}
-          onSaveCommentEdit={onSaveCommentEdit}
-          onSubmitComment={onSubmitComment}
+
           onUpdateComment={onUpdateComment}
-          supportsReviewCommentActions={supportsReviewCommentActions}
         />
       ))}
     </div>
@@ -2457,7 +1657,7 @@ export function ReviewCodeView({
   allowViewedToggle = false,
   blocks,
   bottomInset = codeViewLayout.paddingBottom,
-  codeEditingStore,
+
   codeQualityFindings = [],
   collapsed,
   comments,
@@ -2490,17 +1690,13 @@ export function ReviewCodeView({
   onOpenDefinition,
   onOpenFile,
   onReady,
-  onRefreshMarkdown,
-  onResolveThread = noopResolveThread,
-  onSaveCommentEdit,
+
   onSelectPathFromScroll,
-  onSubmitComment,
+
   onToggleCollapsed,
   onToggleViewed,
   onUpdateComment,
-  onUpdateSourceDescription,
-  onUpdateSourceTitle,
-  onUploadSourceDescriptionAsset,
+
   renderMarkdownAs = 'preview',
   reviewIdentityByPath,
   scrollTarget,
@@ -2511,7 +1707,7 @@ export function ReviewCodeView({
   source,
   sourceDescriptionActions,
   sourceDescriptionFooter,
-  supportsReviewCommentActions,
+
   theme = 'system',
   viewed,
   wordWrap,
@@ -2521,7 +1717,7 @@ export function ReviewCodeView({
   allowViewedToggle?: boolean;
   blocks?: ReadonlyArray<ReviewDiffBlock>;
   bottomInset?: number;
-  codeEditingStore?: CodeEditingStore;
+
   codeQualityFindings?: ReadonlyArray<PullRequestCodeQualityFinding>;
   collapsed: ReadonlySet<string>;
   comments: ReadonlyArray<ReviewComment>;
@@ -2554,17 +1750,13 @@ export function ReviewCodeView({
   onOpenDefinition?: (candidate: DefinitionCandidate) => void;
   onOpenFile?: (file: ChangedFile) => void;
   onReady?: () => void;
-  onRefreshMarkdown?: (file: ChangedFile, section: DiffSection) => Promise<boolean>;
-  onResolveThread?: (threadId: string, resolved: boolean) => Promise<void> | void;
-  onSaveCommentEdit: (commentId: string, body: string) => Promise<void> | void;
+
   onSelectPathFromScroll: (viewer: CodeViewInstance) => void;
-  onSubmitComment: (commentId: string) => void;
+
   onToggleCollapsed: (file: ChangedFile, isCollapsed: boolean, reviewKey: string) => void;
   onToggleViewed: (file: ChangedFile, isViewed: boolean, reviewIdentity: ReviewIdentity) => void;
   onUpdateComment: (commentId: string, body: string) => void;
-  onUpdateSourceDescription?: (body: string) => Promise<void> | void;
-  onUpdateSourceTitle?: (title: string) => Promise<void> | void;
-  onUploadSourceDescriptionAsset?: (file: File) => Promise<string> | string;
+
   renderMarkdownAs?: CodiffPreferences['renderMarkdownAs'];
   reviewIdentityByPath?: ReadonlyMap<string, ReviewIdentity>;
   scrollTarget: ReviewScrollTarget | null;
@@ -2575,7 +1767,7 @@ export function ReviewCodeView({
   source: ReviewSource;
   sourceDescriptionActions?: ReactNode;
   sourceDescriptionFooter?: ReactNode;
-  supportsReviewCommentActions: boolean;
+
   theme?: CodiffPreferences['theme'];
   viewed: Record<string, string>;
   wordWrap: boolean;
@@ -2608,8 +1800,7 @@ export function ReviewCodeView({
   const getPlaceholderFile = useCodeViewPlaceholderFile();
   const getAnnotations = useCodeViewAnnotations();
   const [markdownPreviewHeights] = useState(() => new Map<string, number>());
-  const markdownEditorRefs = useRef(new Map<string, MarkdownDocumentEditorHandle>());
-  const refreshingMarkdownSectionsRef = useRef(new Set<string>());
+
   const deferredTimersRef = useRef<Set<number>>(new Set());
   const handledScrollRequestRef = useRef<number | null>(null);
   const handledHunkNavRef = useRef<number | null>(hunkNavigation?.request ?? null);
@@ -2628,15 +1819,7 @@ export function ReviewCodeView({
   const [markdownPreviewSections, setMarkdownPreviewSections] = useState<
     ReadonlyMap<string, boolean>
   >(() => new Map([...initialMarkdownPreviewSectionIds].map((id) => [id, true])));
-  const [editingMarkdownSections, setEditingMarkdownSections] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [finishingMarkdownSections, setFinishingMarkdownSections] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [markdownEditErrors, setMarkdownEditErrors] = useState<
-    Readonly<Record<string, string | undefined>>
-  >({});
+
   const [markdownContentsVersion, setMarkdownContentsVersion] = useState(0);
   const loadingMarkdownPreviews = useRef(new WeakSet<FileDiffMetadata>());
   const pendingMarkdownSourceRef = useRef<{
@@ -2682,14 +1865,7 @@ export function ReviewCodeView({
       : '';
   const sourceDescriptionHasBody = sourceDescription.length > 0;
   const sourceDescriptionHasContent = sourceDescriptionHasBody || shouldShowCommitMessage;
-  const canEditSourceDescription =
-    shouldShowSourceDescription &&
-    source.canEditDescription === true &&
-    onUpdateSourceDescription != null;
-  const canEditSourceTitle =
-    shouldShowSourceDescription &&
-    (source.canEditTitle === true || source.canEditDescription === true) &&
-    onUpdateSourceTitle != null;
+
   const sourceAuthor = shouldShowCommitMessage
     ? getCommitDescriptionAuthor(commitMessageMetadata.author)
     : shouldShowSourceDescription && source.author
@@ -2718,8 +1894,7 @@ export function ReviewCodeView({
     string | null
   >(null);
   const sourceDescriptionCollapsed =
-    (!sourceDescriptionHasContent && !canEditSourceDescription) ||
-    collapsedSourceDescriptionItemId === sourceDescriptionItemId;
+    !sourceDescriptionHasContent || collapsedSourceDescriptionItemId === sourceDescriptionItemId;
   const toggleSourceDescriptionCollapsed = useCallback(() => {
     setCollapsedSourceDescriptionItemId((current) =>
       current === sourceDescriptionItemId ? null : sourceDescriptionItemId,
@@ -2849,10 +2024,7 @@ export function ReviewCodeView({
         const canRenderImage =
           !isReadOnly && onLoadImageContent != null && canRenderImagePreview(file.path, section);
         const canRenderMarkdown = markdownPreview != null;
-        const canEditMarkdown =
-          canRenderMarkdown &&
-          !isReadOnly &&
-          isEditableWorkingTreeSection(source.type, file, section);
+
         const isMarkdownPreview =
           canRenderMarkdown &&
           (markdownPreviewSections.get(section.id) ?? renderMarkdownAs === 'preview');
@@ -2938,7 +2110,7 @@ export function ReviewCodeView({
 
         nextItemMetadata.set(id, {
           blockId: block.id,
-          canEditMarkdown,
+
           canRenderMarkdown,
           comments: sectionComments,
           file,
@@ -2987,7 +2159,6 @@ export function ReviewCodeView({
               JSON.stringify([
                 markdownPreview.contents,
                 markdownPreview.oldContents,
-                editingMarkdownSections.has(section.id),
                 [...annotationMap.values()],
               ]),
               [
@@ -2999,7 +2170,6 @@ export function ReviewCodeView({
                   lineNumber: 1,
                   metadata: {
                     contents: markdownPreview.contents,
-                    editing: editingMarkdownSections.has(section.id),
                     layoutKey: markdownPreviewLayoutKey,
                     oldContents: markdownPreview.oldContents,
                     path: file.path,
@@ -3014,7 +2184,7 @@ export function ReviewCodeView({
             id,
             type: 'file',
             version: getItemVersion(
-              `${reviewVersionPrefix}:markdown:${sectionStateVersionKey}:${editingMarkdownSections.has(section.id)}:${
+              `${reviewVersionPrefix}:markdown:${sectionStateVersionKey}:${
                 markdownPreviewLayoutKey
               }:${markdownPreviewLayoutPassBySection[section.id] ?? 0}`,
             ),
@@ -3068,14 +2238,13 @@ export function ReviewCodeView({
     itemVersionByKey,
     markdownPreviewLayoutPassBySection,
     markdownPreviewSections,
-    editingMarkdownSections,
+
     markdownContentsVersion,
     onLoadImageContent,
     renderMarkdownAs,
     reviewBlocks,
     selectedPath,
     showWhitespace,
-    source.type,
     viewed,
     reviewIdentityByPath,
   ]);
@@ -3097,131 +2266,6 @@ export function ReviewCodeView({
       },
     ];
   }, [getPlaceholderFile, items, shouldShowCommitMessage, sourceDescriptionItemId]);
-
-  const highlightedCodeItems = codeViewItems.filter(
-    (item) => itemMetadata.get(item.id)?.isSelected,
-  );
-  const selectedCodeItemId =
-    highlightedCodeItems.find(
-      (item) =>
-        item.id === selectedLines?.id && itemMetadata.get(item.id)?.section.kind === 'unstaged',
-    )?.id ??
-    highlightedCodeItems.find((item) => itemMetadata.get(item.id)?.section.kind === 'unstaged')
-      ?.id ??
-    highlightedCodeItems[0]?.id;
-  const codeEditing = useCodeEditing({
-    codeViewRef,
-    items: codeViewItems,
-    keymap,
-    onLoadSectionContents,
-    onRefresh: onRefreshMarkdown,
-    selectedItemId: selectedCodeItemId,
-    sourceKey,
-    store: codeEditingStore,
-  });
-
-  const canEditCodeItem = useCallback(
-    (item: CodeViewItem<ReviewAnnotationMetadata>, meta: CodeViewItemMetadata | undefined) =>
-      meta != null &&
-      item.type === 'diff' &&
-      !isReadOnly &&
-      !meta.section.binary &&
-      (meta.section.loadState == null ||
-        meta.section.loadState === 'ready' ||
-        meta.section.loadState === 'deferred') &&
-      !meta.isMarkdownPreview &&
-      meta.section.kind === 'unstaged' &&
-      isEditableWorkingTreeSection(source.type, meta.file, meta.section) &&
-      onLoadSectionContents != null &&
-      window.codiff?.getRepositoryFile != null,
-    [isReadOnly, onLoadSectionContents, source.type],
-  );
-  const startCodeEdit = useCallback(
-    (item: CodeViewItem<ReviewAnnotationMetadata>, meta: CodeViewItemMetadata) => {
-      if (meta.isCollapsed) {
-        onToggleCollapsed(meta.file, true, meta.reviewIdentity.key);
-      }
-      if (isMarkdownFilePath(meta.file.path)) {
-        // Keep the text diff while editing, even if `renderMarkdownAs` changes.
-        setMarkdownPreviewSections((current) => new Map(current).set(meta.section.id, false));
-      }
-      void codeEditing.startEdit(item, meta);
-    },
-    [codeEditing, onToggleCollapsed],
-  );
-  const editAfterExpandRef = useRef<{ path: string; sourceKey: string } | null>(null);
-  useEffect(() => {
-    const pending = editAfterExpandRef.current;
-    if (!pending) {
-      return;
-    }
-    if (
-      pending.sourceKey !== sourceKey ||
-      !highlightedCodeItems.some((item) => itemMetadata.get(item.id)?.file.path === pending.path)
-    ) {
-      editAfterExpandRef.current = null;
-      return;
-    }
-    const item = highlightedCodeItems.find((candidate) => {
-      const meta = itemMetadata.get(candidate.id);
-      return meta?.file.path === pending.path && canEditCodeItem(candidate, meta);
-    });
-    const meta = item && itemMetadata.get(item.id);
-    if (item && meta) {
-      editAfterExpandRef.current = null;
-      startCodeEdit(item, meta);
-    }
-  }, [canEditCodeItem, highlightedCodeItems, itemMetadata, sourceKey, startCodeEdit]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.repeat ||
-        event.isComposing ||
-        isNativeInputTarget(event.target) ||
-        !matchesShortcut(event, keymap, 'editFile')
-      ) {
-        return;
-      }
-      const item = codeViewItems.find((candidate) => candidate.id === selectedCodeItemId);
-      const meta = item && itemMetadata.get(item.id);
-      if (!item || !meta || !codeEditing.canStartEdit(item.id, meta.file.path)) {
-        return;
-      }
-      if (!canEditCodeItem(item, meta)) {
-        // Collapsed files render only their first section, which may be staged.
-        // Expand first so editing uses the actual unstaged item and its annotations.
-        if (
-          !meta.isCollapsed ||
-          !getVisibleDiffSections(meta.file, showWhitespace).some(({ fileDiff, section }) =>
-            canEditCodeItem({ fileDiff, id: item.id, type: 'diff' }, { ...meta, section }),
-          )
-        ) {
-          return;
-        }
-        event.preventDefault();
-        editAfterExpandRef.current = { path: meta.file.path, sourceKey };
-        onToggleCollapsed(meta.file, true, meta.reviewIdentity.key);
-        return;
-      }
-      event.preventDefault();
-      startCodeEdit(item, meta);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    canEditCodeItem,
-    codeEditing,
-    codeViewItems,
-    itemMetadata,
-    keymap,
-    onToggleCollapsed,
-    selectedCodeItemId,
-    showWhitespace,
-    sourceKey,
-    startCodeEdit,
-  ]);
 
   const clearCommentLineHighlight = useCallback(() => {
     codeViewRef.current?.clearSelectedLines();
@@ -3770,24 +2814,6 @@ export function ReviewCodeView({
     ],
   );
 
-  const replyToThread = useCallback(
-    (threadId: string, comment: ReviewComment) => {
-      clearCommentLineHighlight();
-      cancelPendingEmptyCommentDeletes();
-      onCreateComment({
-        ...(isFileReviewComment(comment) ? { anchor: 'file' as const } : {}),
-        filePath: comment.filePath,
-        ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
-        sectionId: comment.sectionId,
-        ...(comment.side ? { side: comment.side } : {}),
-        ...(comment.startLineNumber != null ? { startLineNumber: comment.startLineNumber } : {}),
-        ...(comment.startSide ? { startSide: comment.startSide } : {}),
-        threadId,
-      });
-    },
-    [cancelPendingEmptyCommentDeletes, clearCommentLineHighlight, onCreateComment],
-  );
-
   const deleteComment = useCallback(
     (commentId: string) => {
       clearCommentLineHighlight();
@@ -3796,92 +2822,17 @@ export function ReviewCodeView({
     [clearCommentLineHighlight, onDeleteComment],
   );
 
-  const setMarkdownEditorRef = useCallback(
-    (sectionId: string, editor: MarkdownDocumentEditorHandle | null) => {
-      if (editor) {
-        markdownEditorRefs.current.set(sectionId, editor);
-      } else {
-        markdownEditorRefs.current.delete(sectionId);
-      }
-    },
-    [],
-  );
-
-  const finishMarkdownEdit = useCallback(
-    async (meta: CodeViewItemMetadata) => {
-      const sectionId = meta.section.id;
-      setFinishingMarkdownSections((current) => new Set(current).add(sectionId));
-      setMarkdownEditErrors((current) => ({ ...current, [sectionId]: undefined }));
-      try {
-        const editor = markdownEditorRefs.current.get(sectionId);
-        if (editor && !(await editor.flush())) {
-          return;
-        }
-        if (onRefreshMarkdown && !(await onRefreshMarkdown(meta.file, meta.section))) {
-          return;
-        }
-        setEditingMarkdownSections((current) => {
-          const next = new Set(current);
-          next.delete(sectionId);
-          return next;
-        });
-      } catch (error: unknown) {
-        setMarkdownEditErrors((current) => ({
-          ...current,
-          [sectionId]: error instanceof Error ? error.message : String(error),
-        }));
-      } finally {
-        setFinishingMarkdownSections((current) => {
-          const next = new Set(current);
-          next.delete(sectionId);
-          return next;
-        });
-      }
-    },
-    [onRefreshMarkdown],
-  );
-
   const toggleMarkdownPreview = useCallback(
-    async (file: ChangedFile, section: DiffSection) => {
+    (_file: ChangedFile, section: DiffSection) => {
       clearCommentLineHighlight();
-      if (
-        (markdownPreviewSections.get(section.id) ?? renderMarkdownAs === 'preview') &&
-        isEditableWorkingTreeSection(source.type, file, section)
-      ) {
-        if (refreshingMarkdownSectionsRef.current.has(section.id)) {
-          return;
-        }
-        refreshingMarkdownSectionsRef.current.add(section.id);
-        try {
-          const editor = markdownEditorRefs.current.get(section.id);
-          if (editor && !(await editor.flush())) {
-            return;
-          }
-          if (editor && onRefreshMarkdown && !(await onRefreshMarkdown(file, section))) {
-            return;
-          }
-        } finally {
-          refreshingMarkdownSectionsRef.current.delete(section.id);
-        }
-      }
-      setMarkdownPreviewSections((current) => {
-        const next = new Map(current);
-        next.set(section.id, !(current.get(section.id) ?? renderMarkdownAs === 'preview'));
-        return next;
-      });
-      setEditingMarkdownSections((current) => {
-        const next = new Set(current);
-        next.delete(section.id);
-        return next;
-      });
+      setMarkdownPreviewSections((current) =>
+        new Map(current).set(
+          section.id,
+          !(current.get(section.id) ?? renderMarkdownAs === 'preview'),
+        ),
+      );
     },
-    [
-      clearCommentLineHighlight,
-      markdownPreviewSections,
-      onRefreshMarkdown,
-      renderMarkdownAs,
-      source.type,
-    ],
+    [clearCommentLineHighlight, renderMarkdownAs],
   );
 
   useEffect(() => {
@@ -4501,27 +3452,24 @@ export function ReviewCodeView({
       <div className="codiff-source-description-panel codiff-code-view-source-description">
         <SourceDescriptionHeader
           actions={sourceDescriptionActions}
-          canCollapse={sourceDescription.length > 0 || canEditSourceDescription}
-          canEditTitle={canEditSourceTitle}
+          canCollapse={sourceDescription.length > 0}
+
           isCollapsed={sourceDescriptionCollapsed}
           label={sourceDescriptionLabel}
           onToggleCollapsed={toggleSourceDescriptionCollapsed}
-          onUpdateTitle={onUpdateSourceTitle}
+
           title={sourceTitle}
         />
-        {!sourceDescriptionCollapsed &&
-        (sourceDescriptionHasContent || canEditSourceDescription) ? (
+        {!sourceDescriptionCollapsed && sourceDescriptionHasContent ? (
           <div className="codiff-source-description-panel-body">
             <SourceDescriptionBody
               ariaLabel={sourceDescriptionAriaLabel}
               author={sourceAuthor}
-              canEdit={canEditSourceDescription}
+
               description={sourceDescription}
-              keymap={keymap}
+
               layoutKey="code-view-header"
               onLayoutReady={noopLayoutReady}
-              onUpdateDescription={onUpdateSourceDescription}
-              onUploadDescriptionAsset={onUploadSourceDescriptionAsset}
             />
             {sourceDescriptionFooter ? (
               <div className="codiff-source-description-footer">{sourceDescriptionFooter}</div>
@@ -4531,12 +3479,6 @@ export function ReviewCodeView({
       </div>
     ),
     [
-      canEditSourceDescription,
-      canEditSourceTitle,
-      keymap,
-      onUpdateSourceDescription,
-      onUpdateSourceTitle,
-      onUploadSourceDescriptionAsset,
       sourceAuthor,
       sourceDescription,
       sourceDescriptionActions,
@@ -4552,92 +3494,13 @@ export function ReviewCodeView({
 
   const renderCustomHeader = useCallback(
     (item: CodeViewItem<ReviewAnnotationMetadata>) => {
-      const editSession = codeEditing.sessions.get(item.id);
-      const meta = editSession?.metadata ?? itemMetadata.get(item.id);
-      const canEditMarkdown = meta?.isMarkdownPreview === true && meta.canEditMarkdown;
-      const isEditingMarkdown = canEditMarkdown && editingMarkdownSections.has(meta.section.id);
-      const isEditing = editSession != null || isEditingMarkdown;
-      const isBusy =
-        codeEditing.isBusy(item.id) ||
-        (canEditMarkdown && finishingMarkdownSections.has(meta.section.id));
-      const isAutosaving = editSession?.saving && !isBusy;
-      const canEdit = canEditMarkdown || canEditCodeItem(item, meta);
-      const editError = canEditMarkdown
-        ? markdownEditErrors[meta.section.id]
-        : codeEditing.getError(item.id);
+      const meta = itemMetadata.get(item.id);
       return meta ? (
         <>
           <CodeViewHeader
             allowViewedToggle={allowViewedToggle}
             canCreateFileComment={canCreateFileComments}
-            editActions={
-              isEditing ? (
-                <>
-                  {editSession ? (
-                    <Button
-                      aria-label={`${editSession?.hasChanges ? 'Revert edits to' : 'Cancel editing'} ${meta.file.path}`}
-                      className="codiff-edit-revert-button"
-                      data-autosaving={isAutosaving ? '' : undefined}
-                      disabled={isBusy || editSession.saving}
-                      onClick={() => void codeEditing.revertEdit(item.id)}
-                      title={
-                        editSession?.hasChanges
-                          ? 'Restore the file to when editing started'
-                          : 'Cancel editing'
-                      }
-                      type="button"
-                      variant={editSession?.hasChanges ? 'destructive' : 'default'}
-                    >
-                      {editSession?.hasChanges ? 'Revert' : 'Cancel'}
-                    </Button>
-                  ) : null}
-                  <Button
-                    aria-label={`Done editing ${meta.file.path}`}
-                    data-autosaving={isAutosaving ? '' : undefined}
-                    disabled={isBusy || editSession?.saving}
-                    onClick={() =>
-                      void (isEditingMarkdown
-                        ? finishMarkdownEdit(meta)
-                        : codeEditing.doneEdit(item.id))
-                    }
-                    title="Finish editing; changes are saved automatically"
-                    type="button"
-                  >
-                    <Check aria-hidden size={14} weight="bold" />
-                    Done
-                  </Button>
-                </>
-              ) : canEdit ? (
-                <FileEditButton
-                  disabled={!codeEditing.canStartEdit(item.id, meta.file.path)}
-                  isBusy={isBusy}
-                  item={item}
-                  meta={meta}
-                  onEdit={() => {
-                    if (canEditMarkdown) {
-                      setMarkdownEditErrors((current) => ({
-                        ...current,
-                        [meta.section.id]: undefined,
-                      }));
-                      setEditingMarkdownSections((current) =>
-                        new Set(current).add(meta.section.id),
-                      );
-                      // Keep the preview while editing, even if `renderMarkdownAs` changes.
-                      setMarkdownPreviewSections((current) =>
-                        new Map(current).set(meta.section.id, true),
-                      );
-                      if (meta.isCollapsed) {
-                        onToggleCollapsed(meta.file, true, meta.reviewIdentity.key);
-                      }
-                    } else {
-                      startCodeEdit(item, meta);
-                    }
-                  }}
-                  onPrepare={canEditMarkdown ? undefined : codeEditing.prepareEdit}
-                />
-              ) : null
-            }
-            isEditing={isEditing}
+
             isSectionLoading={loadingSectionIds.has(meta.section.id)}
             meta={meta}
             onCreateFileComment={() => createFileComment(meta, item.id)}
@@ -4648,32 +3511,24 @@ export function ReviewCodeView({
             onToggleViewed={onToggleViewed}
             readOnly={isReadOnly}
           />
-          {editError ? (
-            <div className="codiff-code-edit-error" role="alert">
-              {editError}
-            </div>
-          ) : null}
         </>
       ) : null;
     },
     [
       allowViewedToggle,
       canCreateFileComments,
-      canEditCodeItem,
+
       createFileComment,
-      codeEditing,
-      editingMarkdownSections,
-      finishingMarkdownSections,
-      finishMarkdownEdit,
+
       itemMetadata,
       isReadOnly,
       loadingSectionIds,
-      markdownEditErrors,
+
       onLoadSection,
       onOpenFile,
       onToggleCollapsed,
       onToggleViewed,
-      startCodeEdit,
+
       toggleMarkdownPreview,
     ],
   );
@@ -4705,11 +3560,11 @@ export function ReviewCodeView({
           <MarkdownPreview
             cacheKey={`${sourceKey}:${item.id}`}
             contents={annotation.metadata.contents}
-            editing={metadata.editing}
+
             heightCache={markdownPreviewHeights}
             itemId={item.id}
             oldContents={metadata.oldContents}
-            onEditorRef={setMarkdownEditorRef}
+
             onLayoutReady={markMarkdownPreviewLayoutReady}
             onViewSource={(lineNumber, side) => {
               pendingMarkdownSourceRef.current = {
@@ -4754,12 +3609,8 @@ export function ReviewCodeView({
           onCommentFocus={focusComment}
           onDeleteComment={deleteComment}
           onHeightChange={() => markCommentLayoutChanged(item.id)}
-          onReplyToThread={replyToThread}
-          onResolveThread={onResolveThread}
-          onSaveCommentEdit={onSaveCommentEdit}
-          onSubmitComment={onSubmitComment}
+
           onUpdateComment={onUpdateComment}
-          supportsReviewCommentActions={supportsReviewCommentActions}
         />
       );
     },
@@ -4779,16 +3630,12 @@ export function ReviewCodeView({
 
       onCommentDraftChange,
       onLoadImageContent,
-      onResolveThread,
-      onSaveCommentEdit,
-      onSubmitComment,
+
       onUpdateComment,
       renderComments,
-      replyToThread,
-      setMarkdownEditorRef,
+
       source,
       sourceKey,
-      supportsReviewCommentActions,
     ],
   );
 
@@ -4834,10 +3681,9 @@ export function ReviewCodeView({
       className={`code-view${compactHeaders ? ' compact-file-headers' : ''}`}
       containerRef={setCodeViewElement}
       disableWorkerPool={disableWorkerPool}
-      editorOptions={codeEditing.editorOptions}
-      items={codeEditing.items}
-      onItemEditChange={codeEditing.onItemEditChange}
-      onItemEditComplete={codeEditing.onItemEditComplete}
+
+      items={codeViewItems}
+
       onScroll={handleScroll}
       onSelectedLinesChange={setCodeViewSelectedLines}
       options={codeViewOptions}
@@ -4861,10 +3707,9 @@ export function ReviewCodeView({
         className={`code-view${compactHeaders ? ' compact-file-headers' : ''}`}
         containerRef={setCodeViewElement}
         disableWorkerPool={false}
-        editorOptions={codeEditing.editorOptions}
-        items={codeEditing.items}
-        onItemEditChange={codeEditing.onItemEditChange}
-        onItemEditComplete={codeEditing.onItemEditComplete}
+
+        items={codeViewItems}
+
         onScroll={handleScroll}
         onSelectedLinesChange={setCodeViewSelectedLines}
         options={codeViewOptions}
@@ -4880,7 +3725,7 @@ export function ReviewCodeView({
 
   return (
     <>
-      <EditProvider createEditor={createCodeEditor}>{renderedCodeView}</EditProvider>
+      {renderedCodeView}
       {definitionLookup?.sourceKey === sourceKey && onOpenDefinition ? (
         <DefinitionPopover
           anchor={definitionLookup.anchor}

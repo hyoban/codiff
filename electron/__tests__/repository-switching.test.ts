@@ -11,16 +11,16 @@ const makeContext = () => {
   const window = { isDestroyed: () => false, reload: vi.fn(), webContents: { id: 1 } };
   const context = {
     BrowserWindow: { getAllWindows: () => [window] },
-    clearMarkdownDocumentWatchers: vi.fn(),
+
     createWindow: vi.fn(),
     definitionSearchCoordinator: { cancel: vi.fn() },
     findMatchingWindowIdentity: () => null,
     focusWindow: vi.fn(),
     getWindowIdentity: (root: string) => ({ key: root, repositoryRoot: root }),
     pendingRepositoryLaunches: new Map(),
-    planInitialVersions: new Map(),
+
     readInitialRepositoryStateWithConfig: vi.fn(),
-    readyPlanWindows: new Set(),
+
     repositoryGenerations: new Map(),
     repositoryWatcherCoordinator: { detach: vi.fn() },
     watchedRepositoryRoots: new Map([[1, '/first']]),
@@ -55,37 +55,8 @@ test('opening another project reuses the window and defers context changes until
   });
   expect(context.repositoryWatcherCoordinator.detach).toHaveBeenCalledWith(1);
   expect(context.definitionSearchCoordinator.cancel).toHaveBeenCalledWith(1);
-  expect(context.clearMarkdownDocumentWatchers).toHaveBeenCalledWith(1);
-  expect(context.repositoryGenerations.get(1)).toBe(1);
-});
 
-test('canceling unload leaves the project and its watcher context intact', () => {
-  const { api, context, window } = makeContext();
-  api.focusOrCreateWindow('/second');
-  let beforeUnload: (event: { preventDefault: () => void }) => void = () => {};
-  const guard = source.slice(
-    source.indexOf("  window.webContents.on('will-prevent-unload'"),
-    source.indexOf("  window.on('close'"),
-  );
-  runInNewContext(guard, {
-    dialog: { showMessageBoxSync: () => 0 },
-    pendingRepositoryLaunches: context.pendingRepositoryLaunches,
-    webContentsId: 1,
-    window: {
-      ...window,
-      webContents: {
-        on: (_name: string, callback: typeof beforeUnload) => {
-          beforeUnload = callback;
-        },
-      },
-    },
-  });
-  const preventDefault = vi.fn();
-  beforeUnload({ preventDefault });
-  api.activatePendingRepositoryLaunch(1);
-  expect(preventDefault).not.toHaveBeenCalled();
-  expect(context.windowRepositories.get(1)).toBe('/first');
-  expect(context.repositoryWatcherCoordinator.detach).not.toHaveBeenCalled();
+  expect(context.repositoryGenerations.get(1)).toBe(1);
 });
 
 test('opening the active project focuses it without reloading', () => {

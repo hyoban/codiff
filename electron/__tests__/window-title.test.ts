@@ -61,10 +61,6 @@ test('titles windows with the repository and selected source', () => {
   ).toBe('MyCoolRepo/main...feature · Codiff');
 });
 
-test('titles plan windows like web pages', () => {
-  expect(getPlanWindowTitle('/tmp/implementation-plan.md')).toBe('implementation-plan.md · Codiff');
-});
-
 test('restores the repository title after the renderer loads', async () => {
   let title = '';
   const target = {

@@ -22,7 +22,6 @@ const getWindowSourceTitle = (source) =>
 const getCodiffWindowTitle = (title) => `${title} · Codiff`;
 
 /** @param {string} planFile */
-const getPlanWindowTitle = (planFile) => getCodiffWindowTitle(basename(planFile));
 
 /**
  * @param {WindowRepositoryState} state
@@ -48,7 +47,6 @@ const restoreRepositoryWindowTitleAfterLoad = async (target, initialRepositorySt
 };
 
 module.exports = {
-  getPlanWindowTitle,
   getRepositoryWindowTitle,
   restoreRepositoryWindowTitleAfterLoad,
 };

@@ -64,50 +64,6 @@ const defaultLaunchOptions = {
   repositoryPathProvided: false,
 };
 
-test('plan command lines do not inspect Git refs', { concurrent: false }, async () => {
-  await using directory = await createTemporaryDirectory('codiff-plan-command-line-');
-  const fakeBin = join(directory.path, 'bin');
-  const gitMarker = join(directory.path, 'git-invoked');
-  const planFile = join(directory.path, 'plan.md');
-  await using _environment = createTemporaryEnvironment({
-    PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-  });
-
-  await mkdir(fakeBin);
-  await writeFile(planFile, '# Plan\n');
-  await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
-  await chmod(join(fakeBin, 'git'), 0o755);
-
-  expect(readCommandLine(['codiff', '--plan-file', planFile, 'workspace'])).toMatchObject({
-    launchOptions: {
-      planFile,
-      repositoryPathProvided: true,
-    },
-    repositoryPath: 'workspace',
-  });
-  expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
-});
-
-test('parses plan handoff command-line options', () => {
-  expect(
-    readCommandLine([
-      'codiff',
-      '--plan-file',
-      '/tmp/plan.md',
-      '--plan-result-file',
-      '/tmp/result.json',
-      '/repo',
-    ]),
-  ).toMatchObject({
-    launchOptions: {
-      planFile: '/tmp/plan.md',
-      planResultFile: '/tmp/result.json',
-      repositoryPathProvided: true,
-    },
-    repositoryPath: '/repo',
-  });
-});
-
 test('parses positional HEAD revisions as commit sources', () => {
   expect(readCommandLine(['codiff', 'HEAD'])).toEqual({
     launchOptions: {
@@ -348,17 +304,6 @@ test('does not restore over explicit launch intent', async () => {
     ),
   ).toBe('/fallback');
 
-  expect(
-    getInitialRepositoryPath(
-      '/fallback',
-      {
-        planFile: '/tmp/plan.md',
-        repositoryPathProvided: false,
-      },
-      directory.path,
-      {},
-    ),
-  ).toBe('/fallback');
   expect(
     getInitialRepositoryPath('/fallback', defaultLaunchOptions, directory.path, {
       CODIFF_REPOSITORY_PATH: '/explicit',

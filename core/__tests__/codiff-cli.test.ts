@@ -6,12 +6,11 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, expect, test } from 'vite-plus/test';
 import {
   formatHelpText,
-  getReviewSource,
   parseArguments,
   resolvePullRequestTargetUrl,
   resolvePullRequestUrl,
 } from '../../bin/arguments.js';
-import { createFakeCommandLogger, createFakeOpenLogger } from './helpers/cli.ts';
+import { createFakeOpenLogger } from './helpers/cli.ts';
 import { removeGitTestDirectory } from './helpers/git.ts';
 import { getGitTestEnvironment } from './helpers/git.ts';
 import {
@@ -149,21 +148,6 @@ test('parseArguments treats plain branch refs as branch refs', async () => {
   });
 });
 
-test('shared branch reviews include uncommitted changes', () => {
-  expect(
-    getReviewSource({
-      branchRef: 'main',
-      commitRef: null,
-      pullRequestProvider: null,
-      pullRequestUrl: null,
-      range: null,
-    }),
-  ).toEqual({
-    ref: 'main',
-    type: 'branch-working-tree',
-  });
-});
-
 test('parseArguments treats missing plain refs in Git repositories as branch refs', async () => {
   await withCwd(refRepositoryPath, () => {
     expect(parseArguments(['definitely-missing-branch'])).toMatchObject({
@@ -211,37 +195,6 @@ test('parseArguments keeps existing hash-like paths as repository paths', async 
   });
 });
 
-test(
-  'parseArguments does not inspect Git refs for plan working directories',
-  { concurrent: false },
-  async () => {
-    await using directory = await createTemporaryDirectory('codiff-plan-arguments-');
-    const fakeBin = join(directory.path, 'bin');
-    const gitMarker = join(directory.path, 'git-invoked');
-    const planFile = join(directory.path, 'plan.md');
-    const workspace = join(directory.path, 'workspace');
-
-    await mkdir(fakeBin);
-    await mkdir(workspace);
-    await writeFile(planFile, '# Plan\n');
-    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
-    await chmod(join(fakeBin, 'git'), 0o755);
-    await using _environment = createTemporaryEnvironment({
-      PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-    });
-    const realWorkspace = await realpath(workspace);
-
-    await withCwd(directory.path, () => {
-      expect(parseArguments(['--plan', planFile, 'workspace'])).toMatchObject({
-        commitRef: null,
-        planFilePath: planFile,
-        requestedPath: realWorkspace,
-      });
-    });
-    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
-  },
-);
-
 test('parseArguments treats GitHub pull request URLs as review sources', () => {
   const pullRequestUrl = 'https://github.com/nkzw-tech/codiff/pull/3';
 
@@ -286,13 +239,6 @@ test('parseArguments treats GitHub PR branch markers as review sources', () => {
     pullRequestNumber: null,
     pullRequestProvider: 'github',
     requestedPath: '/path/to/repository',
-  });
-});
-
-test('parseArguments recognizes a blocking Markdown plan', () => {
-  expect(parseArguments(['--plan', 'plan.md'])).toMatchObject({
-    planFilePath: resolve('plan.md'),
-    requestedPath: resolve(process.cwd()),
   });
 });
 
@@ -656,102 +602,6 @@ test('packaged terminal helper forwards relative repository paths as absolute pa
   await expect(runHelper(['-w', '.'])).rejects.toThrow('unknown option');
 });
 
-test('packaged terminal helper forwards a plan handoff and result file', async () => {
-  await using logger = await createFakeOpenLogger();
-  const repositoryPath = join(logger.directory, 'repo');
-  const planFile = join(logger.directory, 'plan.md');
-  const resultFile = join(logger.directory, 'result.json');
-
-  await mkdir(repositoryPath);
-  await writeFile(planFile, '# Plan\n');
-  await writeFile(resultFile, '{"status":"done"}\n');
-
-  const { stdout } = await execFileAsync(
-    resolve('bin/codiff-app'),
-    ['--plan-file', planFile, '--plan-result-file', resultFile, repositoryPath],
-    {
-      env: logger.env,
-    },
-  );
-
-  expect(await logger.readArgs()).toEqual([
-    '-n',
-    resolve('bin/../../../..'),
-    '--args',
-    '--plan-file',
-    planFile,
-    '--plan-result-file',
-    resultFile,
-    repositoryPath,
-  ]);
-  expect(stdout).toBe('CODIFF_PLAN_RESULT {"status":"done"}\n');
-});
-
-test('packaged terminal helper waits for an open plan to finish', async () => {
-  await using logger = await createFakeOpenLogger();
-  const repositoryPath = join(logger.directory, 'repo');
-  const planFile = join(logger.directory, 'plan.md');
-  const resultFile = join(logger.directory, 'result.json');
-  const openPath = join(logger.directory, 'bin', 'open');
-
-  await mkdir(repositoryPath);
-  await writeFile(planFile, '# Plan\n');
-  await writeFile(
-    openPath,
-    `#!/bin/sh
-result_file=""
-previous=""
-for arg in "$@"; do
-  printf "%s\\n" "$arg" >> "$OPEN_ARGS_FILE"
-  if [ "$previous" = "--plan-result-file" ]; then
-  result_file="$arg"
-  fi
-  previous="$arg"
-done
-(
-  sleep 0.05
-  printf '{"documentChanged":true,"status":"closed"}\\n' > "$result_file"
-) &
-app_pid=$!
-printf '{"pid":%s,"status":"open"}\\n' "$app_pid" > "$result_file"
-`,
-  );
-  await chmod(openPath, 0o755);
-
-  const { stdout } = await execFileAsync(
-    resolve('bin/codiff-app'),
-    ['--plan-file', planFile, '--plan-result-file', resultFile, repositoryPath],
-    {
-      env: logger.env,
-    },
-  );
-
-  expect(await logger.readArgs()).toEqual([
-    '-n',
-    resolve('bin/../../../..'),
-    '--args',
-    '--plan-file',
-    planFile,
-    '--plan-result-file',
-    resultFile,
-    repositoryPath,
-  ]);
-  expect(stdout).toBe('CODIFF_PLAN_RESULT {"documentChanged":true,"status":"closed"}\n');
-});
-
-test('packaged terminal helper runs --share through the bundled Node entry point', async () => {
-  await using logger = await createFakeCommandLogger('codiff-packaged-share-', 'runtime');
-
-  await execFileAsync(resolve('bin/codiff-app'), ['--share', 'HEAD'], {
-    env: {
-      ...logger.env,
-      CODIFF_NODE_COMMAND: logger.commandPath,
-    },
-  });
-
-  expect(await logger.readArgs()).toEqual([resolve('bin/codiff.js'), '--share', 'HEAD']);
-});
-
 test('parseArguments recognizes --help and -h flags', () => {
   expect(parseArguments(['--help']).help).toBe(true);
   expect(parseArguments(['-h']).help).toBe(true);
@@ -784,14 +634,14 @@ test('formatHelpText includes version and all flags', () => {
   expect(text).toContain('--commit');
   expect(text).not.toContain('--codex-session');
   expect(text).not.toContain('--opencode-session');
-  expect(text).toContain('--plan');
-  expect(text).toContain('--share');
+  expect(text).not.toContain('--plan');
+  expect(text).not.toContain('--share');
   expect(text).not.toContain('--walkthrough');
   expect(text).not.toContain('--walkthrough-context');
   expect(text).toContain('-h');
   expect(text).toContain('-v');
   expect(text).not.toContain('-w');
-  expect(text).toContain('codiff --plan plan.md --share');
+  expect(text).not.toContain('codiff --plan plan.md --share');
   expect(text).toContain('codiff pr owner:feature');
 });
 

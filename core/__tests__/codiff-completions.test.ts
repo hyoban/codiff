@@ -128,10 +128,6 @@ test('completes refs for flags documented as taking a ref', () => {
   expect(script).toContain("-l commit -x -a '(__codiff_refs)'");
 });
 
-test('completes paths for flags documented as taking a file', () => {
-  expect(generateCompletionScript('fish')).toContain('-l plan -r -F');
-});
-
 test('completes the documented choices for flags that list them', () => {
   expect(generateCompletionScript('fish')).toContain("-l completions -x -a 'bash fish zsh'");
 });
@@ -188,7 +184,6 @@ test('leaves the argument after a ref to path completion in bash', async () => {
 test.for([
   ['--branch', 'main'],
   ['--commit', 'HEAD'],
-  ['--plan', 'plan.md'],
 ])('leaves the argument after %s to path completion in bash', async ([flag, value]) => {
   const { candidates } = await completeWithBash(['codiff', flag, value, 'ma']);
 

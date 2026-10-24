@@ -1,20 +1,16 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
-import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import packageJson from '../package.json' with { type: 'json' };
 import { formatHelpText, parseArguments, resolvePullRequestTargetUrl } from './arguments.js';
 import { completionShells, generateCompletionScript } from './completions.js';
-import { waitForPlanResult } from './plan-result.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
 
 // The renderer is the built dist/ by default. When Codiff's own Vite dev server
 // is running, use it instead so source edits hot-reload without a rebuild. The
@@ -68,23 +64,6 @@ const detectDevServer = (url) =>
     request.on('error', () => finish(false));
   });
 
-const openExternal = (url) =>
-  new Promise((resolveOpen, reject) => {
-    const command =
-      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-    const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'start', '""', url] : [url];
-    const child = spawn(command, args, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    child.once('error', reject);
-    child.once('spawn', () => {
-      child.unref();
-      resolveOpen();
-    });
-  });
-
 const run = async () => {
   const parsedArguments = parseArguments(process.argv.slice(2));
 
@@ -123,22 +102,14 @@ const run = async () => {
 
     commitRef,
 
-    planFilePath,
-    public: forcePublic,
     pullRequestBranch,
     pullRequestNumber,
     pullRequestProvider,
     range,
     requestedPath,
-    share,
   } = parsedArguments;
   let { pullRequestUrl } = parsedArguments;
 
-  if (planFilePath && (!existsSync(planFilePath) || !/\.md$/i.test(planFilePath))) {
-    process.stderr.write(`codiff: plan file not found or not Markdown: ${planFilePath}\n`);
-    process.exitCode = 1;
-    return;
-  }
   if (!pullRequestUrl && (pullRequestBranch || pullRequestNumber != null)) {
     try {
       pullRequestUrl = resolvePullRequestTargetUrl({
@@ -154,32 +125,6 @@ const run = async () => {
     }
   }
 
-  if (share) {
-    if (planFilePath) {
-      const { sharePlanFile } = require('../electron/headless-plan-share.cjs');
-
-      try {
-        const url = await sharePlanFile({
-          codiffVersion: packageJson.version,
-          forcePublic,
-          openExternal,
-          planFile: planFilePath,
-          repositoryPath: requestedPath,
-          serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
-        });
-        process.stdout.write(`${url}\n`);
-      } catch (error) {
-        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-        process.exitCode = 1;
-      }
-      return;
-    }
-
-    process.stderr.write('codiff: --share requires --plan.\n');
-    process.exitCode = 1;
-    return;
-  }
-
   // Prefer an explicit ELECTRON_RENDERER_URL; otherwise auto-use Codiff's dev
   // server when it is actually running and identifies as Codiff.
   const rendererURL =
@@ -190,10 +135,6 @@ const run = async () => {
     process.exit(1);
   }
 
-  const planResultDirectory = planFilePath
-    ? mkdtempSync(join(tmpdir(), 'codiff-plan-result-'))
-    : null;
-  const planResultPath = planResultDirectory ? join(planResultDirectory, 'result.json') : '';
   const childEnv = {
     ...process.env,
 
@@ -201,8 +142,6 @@ const run = async () => {
 
     CODIFF_COMMIT_REF: commitRef ?? '',
 
-    CODIFF_PLAN_FILE: planFilePath ?? '',
-    CODIFF_PLAN_RESULT_FILE: planResultPath,
     CODIFF_PULL_REQUEST_URL: pullRequestUrl ?? '',
     CODIFF_REVIEW_PROVIDER: pullRequestProvider ?? '',
     CODIFF_RANGE: range ? `${range.base}${range.symmetric ? '...' : '..'}${range.head}` : '',
@@ -227,23 +166,6 @@ const run = async () => {
   });
 
   child.unref();
-  if (planResultDirectory) {
-    try {
-      const result = await waitForPlanResult(planResultPath, child);
-      if (result.status === 'canceled') {
-        process.exitCode = 2;
-      } else {
-        process.stdout.write(`CODIFF_PLAN_RESULT ${JSON.stringify(result)}\n`);
-      }
-    } catch (error) {
-      process.stderr.write(
-        `${error instanceof Error ? error.message : 'Codiff could not open the plan.'}\n`,
-      );
-      process.exitCode = 1;
-    } finally {
-      rmSync(planResultDirectory, { force: true, recursive: true });
-    }
-  }
 };
 
 run();

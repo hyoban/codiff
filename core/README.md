@@ -1,5 +1,4 @@
-# @nkzw/codiff-core
+# Codiff Core
 
-Reusable diffing types and Markdown plan review components from Codiff.
-
-Import plan validation helpers from `@nkzw/codiff-core/share` and `PlanReviewSurface` from `@nkzw/codiff-core/react`.
+Shared rendering, Git diff types, and display preferences for the read-only desktop app.
+Inline review notes are local. Repository editing, committing, and remote publishing are not supported.

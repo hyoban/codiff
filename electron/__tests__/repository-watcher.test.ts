@@ -30,16 +30,10 @@ type Coordinator = {
     notify: (root: string) => void;
     root: string;
   }) => Promise<void>;
-  beginWrite: (
-    id: number,
-    path: string,
-  ) => { generation: number; path: string; root: string } | null;
+
   checkNow: (id: number) => Promise<void>;
   detach: (id: number) => void;
-  finishWrite: (
-    token: { generation: number; path: string; root: string } | null,
-    version: string | null,
-  ) => void;
+
   focus: (id: number) => void;
   getWatcherCount: () => number;
   getWatcherSubscriberCount: (root: string) => number;
@@ -54,7 +48,6 @@ const {
   normalizeRepositoryWatcherPath,
   parseRepositoryWatcherStatus,
   readRepositoryWatcherSnapshot,
-  repositoryWatcherSnapshotsMatchExpectedWrites,
 } = require('../repository-watcher.cjs') as {
   createRepositoryWatcherCoordinator: (options: {
     clearTimeoutImpl?: (timer: unknown) => void;
@@ -73,11 +66,6 @@ const {
     exactPaths?: Iterable<string>,
     knownDirtyPaths?: Iterable<string>,
   ) => Promise<Snapshot>;
-  repositoryWatcherSnapshotsMatchExpectedWrites: (
-    left: Snapshot,
-    right: Snapshot,
-    expectedPathVersions: ReadonlyMap<string, string>,
-  ) => boolean;
 };
 
 const execFileAsync = promisify(execFile);
@@ -125,81 +113,6 @@ test('parses porcelain-v2 branch information and dirty paths', () => {
     head: `${hash}\0feature`,
     paths: ['src/app file.ts', 'src/new.ts', 'src/old.ts', 'conflicted.ts', 'untracked file.txt'],
   });
-});
-
-test('ignores only expected app-written paths', () => {
-  expect(
-    repositoryWatcherSnapshotsMatchExpectedWrites(
-      baseline,
-      {
-        ...baseline,
-        pathSignatures: {
-          ...baseline.pathSignatures,
-          'docs/plan.md': planSignature,
-        },
-        pathVersions: {
-          'docs/plan.md': planVersion.slice(0, 16),
-        },
-      },
-      new Map([['docs/plan.md', planVersion]]),
-    ),
-  ).toBe(true);
-
-  expect(
-    repositoryWatcherSnapshotsMatchExpectedWrites(
-      baseline,
-      {
-        ...baseline,
-        pathSignatures: {
-          'docs/plan.md': planSignature,
-          'src/app.ts': 'new-app',
-        },
-        pathVersions: {
-          'docs/plan.md': planVersion.slice(0, 16),
-        },
-      },
-      new Map([['docs/plan.md', planVersion]]),
-    ),
-  ).toBe(false);
-});
-
-test('does not ignore a different write to the expected path', () => {
-  expect(
-    repositoryWatcherSnapshotsMatchExpectedWrites(
-      baseline,
-      {
-        ...baseline,
-        pathSignatures: {
-          ...baseline.pathSignatures,
-          'docs/plan.md': planSignature,
-        },
-        pathVersions: {
-          'docs/plan.md': 'external-change',
-        },
-      },
-      new Map([['docs/plan.md', planVersion]]),
-    ),
-  ).toBe(false);
-});
-
-test('never ignores repository HEAD changes', () => {
-  expect(
-    repositoryWatcherSnapshotsMatchExpectedWrites(
-      baseline,
-      {
-        ...baseline,
-        head: 'new-head',
-        pathSignatures: {
-          ...baseline.pathSignatures,
-          'docs/plan.md': planSignature,
-        },
-        pathVersions: {
-          'docs/plan.md': planVersion.slice(0, 16),
-        },
-      },
-      new Map([['docs/plan.md', planVersion]]),
-    ),
-  ).toBe(false);
 });
 
 test('shares one watcher per repository and adapts polling to window state', async () => {
@@ -305,66 +218,6 @@ test('resetting one subscriber preserves change notifications for other windows'
   await coordinator.checkNow(1);
   expect(notifications).toEqual([2, 1]);
 
-  coordinator.detach(1);
-  coordinator.detach(2);
-});
-
-test('uses exact hashes while suppressing Codiff-authored writes only for their owner', async () => {
-  let current = baseline;
-  const exactPathReads: Array<Array<string>> = [];
-  const knownDirtyPathReads: Array<Array<string>> = [];
-  const notifications: Array<number> = [];
-  const coordinator = createRepositoryWatcherCoordinator({
-    readSnapshot: async (_root, exactPaths, knownDirtyPaths) => {
-      const paths = [...exactPaths];
-      exactPathReads.push(paths);
-      knownDirtyPathReads.push([...knownDirtyPaths]);
-      return {
-        ...current,
-        pathVersions: paths.includes('docs/plan.md')
-          ? { 'docs/plan.md': planVersion.slice(0, 16) }
-          : {},
-      };
-    },
-  });
-  await coordinator.attach({
-    getState: () => ({ focused: true, visible: true }),
-    id: 1,
-    notify: () => notifications.push(1),
-    root: '/repo',
-  });
-  await coordinator.attach({
-    getState: () => ({ focused: true, visible: true }),
-    id: 2,
-    notify: () => notifications.push(2),
-    root: '/repo',
-  });
-
-  const token = coordinator.beginWrite(1, 'docs/plan.md');
-  current = {
-    ...baseline,
-    pathSignatures: {
-      ...baseline.pathSignatures,
-      'docs/plan.md': planSignature,
-    },
-  };
-  coordinator.finishWrite(token, planVersion);
-  await coordinator.checkNow(1);
-
-  expect(exactPathReads.at(-1)).toEqual(['docs/plan.md']);
-  expect(knownDirtyPathReads.at(-1)).toEqual(['docs/plan.md', 'src/app.ts']);
-  expect(notifications).toEqual([2]);
-
-  current = {
-    ...current,
-    pathSignatures: {
-      ...current.pathSignatures,
-      'src/app.ts': 'external-change',
-    },
-  };
-  await coordinator.checkNow(1);
-  expect(exactPathReads.at(-1)).toEqual([]);
-  expect(notifications).toEqual([2, 1]);
   coordinator.detach(1);
   coordinator.detach(2);
 });

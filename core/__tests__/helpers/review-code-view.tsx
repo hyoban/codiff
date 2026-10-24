@@ -203,9 +203,9 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
       onDeleteComment={() => {}}
       onLoadSection={() => {}}
       onOpenFile={() => {}}
-      onSaveCommentEdit={() => {}}
+
       onSelectPathFromScroll={() => {}}
-      onSubmitComment={() => {}}
+
       onToggleCollapsed={() => {}}
       onToggleViewed={() => {}}
       onUpdateComment={() => {}}
@@ -214,7 +214,7 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
       selectedPath={null}
       showWhitespace={false}
       source={source}
-      supportsReviewCommentActions={false}
+
       viewed={{}}
       wordWrap={false}
       {...overrides}

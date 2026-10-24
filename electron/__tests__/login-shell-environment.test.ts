@@ -20,7 +20,6 @@ const { getCommandEnvironment, getLoginShellEnvironment, resolveLoginShellEnviro
 const { findExecutableOnPath } = require('../command-utils.cjs') as {
   findExecutableOnPath: (command: string) => string | null;
 };
-const { spawnPty } = require('../pty.cjs') as { spawnPty: typeof import('node-pty').spawn };
 
 const fishPath = findExecutableOnPath('fish');
 const zshPath = findExecutableOnPath('zsh');
@@ -53,48 +52,6 @@ const expectProcessToExit = async (pidPath: string) => {
     }
   }
 };
-
-test.skipIf(process.platform === 'win32')(
-  'isolates login shells from the caller’s controlling terminal',
-  async () => {
-    await using directory = await createTemporaryDirectory('codiff-login-shell-terminal-');
-    const shell = await createFakeLoginShell(
-      directory.path,
-      `if ( : </dev/tty ) 2>/dev/null; then
-  export CODIFF_HAS_TERMINAL=yes
-else
-  export CODIFF_HAS_TERMINAL=no
-fi
-exec /bin/sh -c "$4"
-`,
-    );
-    const terminal = spawnPty(
-      process.execPath,
-      [
-        '-e',
-        `const { openSync, closeSync } = require('node:fs');
-const { resolveLoginShellEnvironment } = require(${JSON.stringify(require.resolve('../login-shell-environment.cjs'))});
-closeSync(openSync('/dev/tty', 'r'));
-resolveLoginShellEnvironment(${JSON.stringify(shell)}).then((environment) => {
-  console.log('CODIFF_HAS_TERMINAL=' + environment.CODIFF_HAS_TERMINAL);
-});`,
-      ],
-      { cwd: directory.path },
-    );
-    let output = '';
-    const dataListener = terminal.onData((data) => (output += data));
-    try {
-      const result = await new Promise<{ exitCode: number }>((resolve) => {
-        terminal.onExit(resolve);
-      });
-      expect(result.exitCode).toBe(0);
-      expect(output).toContain('CODIFF_HAS_TERMINAL=no');
-    } finally {
-      dataListener.dispose();
-      terminal.kill();
-    }
-  },
-);
 
 test('resolves variables exported by the login shell', async () => {
   await using directory = await createTemporaryDirectory('codiff-login-shell-');

@@ -6,9 +6,6 @@ import {
   getRefreshedReviewComments,
   getReviewCommentsFromState,
   getVisibleReviewComments,
-  mergeReviewComments,
-  toSubmittedReviewComment,
-  toPullRequestReviewComment,
 } from '../lib/review-comments.ts';
 import type { RepositoryState } from '../types.ts';
 
@@ -289,53 +286,6 @@ test('getVisibleReviewComments keeps user-authored comments that are never outda
   const comments = [createReviewComment({ id: 'draft', isReadOnly: false })];
 
   expect(getVisibleReviewComments(comments, false)).toHaveLength(1);
-});
-
-test('serializes file-level thread replies without inventing line metadata', () => {
-  expect(
-    toPullRequestReviewComment(
-      createReviewComment({
-        anchor: 'file',
-        body: 'Reply in the existing discussion.',
-        lineNumber: undefined,
-        side: undefined,
-        threadId: 'discussion-1',
-      }),
-    ),
-  ).toEqual({
-    anchor: 'file',
-    body: 'Reply in the existing discussion.',
-    filePath: 'src/a.ts',
-    threadId: 'discussion-1',
-  });
-});
-
-test('keeps a submitted shared comment visible until the matching snapshot comment arrives', () => {
-  const draft = createReviewComment({
-    id: 'draft-comment',
-    remoteSubmit: { status: 'submitting' },
-  });
-  const submitted = toSubmittedReviewComment(
-    {
-      author: { login: 'ada', name: 'Ada Lovelace' },
-      body: draft.body,
-      canDelete: true,
-      canEdit: true,
-      filePath: draft.filePath,
-      id: 'persisted-comment',
-      lineNumber: draft.lineNumber,
-      sectionId: draft.sectionId,
-      side: draft.side,
-      submittedAt: '2026-07-16T12:00:00.000Z',
-      threadId: 'persisted-thread',
-    },
-    draft,
-  );
-
-  expect(mergeReviewComments([], [submitted])).toEqual([submitted]);
-
-  const snapshotComment = { ...submitted, body: 'Canonical server comment.' };
-  expect(mergeReviewComments([snapshotComment], [submitted])).toEqual([snapshotComment]);
 });
 
 test('getRefreshedReviewComments keeps locally created comments across a Markdown refresh', () => {

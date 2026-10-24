@@ -26,12 +26,6 @@ export default defineConfig({
       'pnpm-lock.yaml',
       'core/__generated__/',
       'core/node_modules/',
-      'service/node_modules/',
-      'service/dist/',
-      'web/.fate/',
-      'web/.void/',
-      'web/.wrangler/',
-      'web/node_modules/',
     ],
     singleQuote: true,
   },
@@ -42,12 +36,6 @@ export default defineConfig({
       'dist/',
       'electron/',
       'core/node_modules/',
-      'service/node_modules/',
-      'service/dist/',
-      'web/.fate/',
-      'web/.void/',
-      'web/.wrangler/',
-      'web/node_modules/',
       'vite.config.ts.timestamp-*',
     ],
     options: { typeAware: true, typeCheck: true },
@@ -59,11 +47,6 @@ export default defineConfig({
         files: ['core/lib/diff-hunks.cjs'],
       },
     ],
-  },
-  optimizeDeps: {
-    // ghostty-web inlines its WASM binary as a huge base64 data URL, which
-    // stalls the dep optimizer; it ships as plain ESM, so skip prebundling.
-    exclude: ['ghostty-web'],
   },
   pack: {
     copy: [
@@ -111,12 +94,7 @@ export default defineConfig({
     '*': 'vp check --fix',
   },
   test: {
-    include: [
-      'core/**/*.test.{ts,tsx}',
-      'electron/**/*.test.ts',
-      'service/**/*.test.ts',
-      'web/**/*.test.{ts,tsx}',
-    ],
+    include: ['core/**/*.test.{ts,tsx}', 'electron/**/*.test.ts'],
     maxWorkers: testWorkers,
     setupFiles: ['./core/__tests__/setup.ts'],
   },

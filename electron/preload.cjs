@@ -16,8 +16,8 @@ const launchOptions = ipcRenderer.invoke('codiff:getLaunchOptions');
 let initialConfig = ipcRenderer.invoke('codiff:getConfig');
 initialConfig.catch(() => {});
 /** @type {Promise<import('../core/types.ts').RepositoryState | undefined> | undefined} */
-let initialRepositoryState = launchOptions.then((options) =>
-  options.planFile ? undefined : ipcRenderer.invoke('codiff:getRepositoryState'),
+let initialRepositoryState = launchOptions.then(() =>
+  ipcRenderer.invoke('codiff:getRepositoryState'),
 );
 initialRepositoryState.catch(() => {});
 
@@ -33,9 +33,6 @@ if (document.documentElement) {
 
 /** @type {Window['codiff']} */
 const codiff = {
-  createCommit: (request) => ipcRenderer.invoke('codiff:createCommit', request),
-  completePlan: (review, status) => ipcRenderer.invoke('codiff:completePlan', review, status),
-
   getConfig: () => {
     const initial = initialConfig;
     initialConfig = undefined;
@@ -43,15 +40,14 @@ const codiff = {
   },
   decreaseCodeFontSize: () => ipcRenderer.invoke('codiff:decreaseCodeFontSize'),
   getDiffSectionContent: (request) => ipcRenderer.invoke('codiff:getDiffSectionContent', request),
-  getFeatureFlags: () => ipcRenderer.invoke('codiff:getFeatureFlags'),
+
   getDiffImageContent: (request) => ipcRenderer.invoke('codiff:getDiffImageContent', request),
   getGitIdentity: () => ipcRenderer.invoke('codiff:getGitIdentity'),
   getKeyboardLayout: () => ipcRenderer.invoke('codiff:getKeyboardLayout'),
   getLaunchOptions: () => launchOptions,
-  getMarkdownDocument: (request) => ipcRenderer.invoke('codiff:getMarkdownDocument', request),
-  getRepositoryFile: (path) => ipcRenderer.invoke('codiff:getRepositoryFile', path),
+
   getPreferences: () => ipcRenderer.invoke('codiff:getPreferences'),
-  getPlanReview: () => ipcRenderer.invoke('codiff:getPlanReview'),
+
   getRepositoryHistory: (limit, source) =>
     ipcRenderer.invoke('codiff:getRepositoryHistory', limit, source),
   getRepositoryState: (source) => {
@@ -66,7 +62,7 @@ const codiff = {
   installTerminalHelper: () => ipcRenderer.invoke('codiff:installTerminalHelper'),
   increaseCodeFontSize: () => ipcRenderer.invoke('codiff:increaseCodeFontSize'),
   isWindowFullScreen: () => ipcRenderer.invoke('codiff:isWindowFullScreen'),
-  markPlanReady: () => ipcRenderer.invoke('codiff:markPlanReady'),
+
   markWindowReady: () => ipcRenderer.send('codiff:windowReady'),
   onConfigChanged: (callback) => {
     /** @param {Electron.IpcRendererEvent} _event @param {import('../core/config/types.ts').CodiffConfig} nextConfig */
@@ -110,22 +106,7 @@ const codiff = {
     ipcRenderer.on('codiff:openReviewSource', listener);
     return () => ipcRenderer.removeListener('codiff:openReviewSource', listener);
   },
-  onMarkdownDocumentChanged: (callback) => {
-    const listener = (_event, change) => callback(change);
-    ipcRenderer.on('codiff:markdownDocumentChanged', listener);
-    return () => ipcRenderer.removeListener('codiff:markdownDocumentChanged', listener);
-  },
-  onPlanCloseRequested: (callback) => {
-    const listener = () => callback();
-    ipcRenderer.on('codiff:planCloseRequested', listener);
-    return () => ipcRenderer.removeListener('codiff:planCloseRequested', listener);
-  },
-  onCommitOutput: (callback) => {
-    /** @param {Electron.IpcRendererEvent} _event @param {string} chunk */
-    const listener = (_event, chunk) => callback(String(chunk));
-    ipcRenderer.on('codiff:commitOutput', listener);
-    return () => ipcRenderer.removeListener('codiff:commitOutput', listener);
-  },
+
   onWindowFullScreenChanged: (callback) => {
     /** @param {Electron.IpcRendererEvent} _event @param {boolean} isFullScreen */
     const listener = (_event, isFullScreen) => callback(Boolean(isFullScreen));
@@ -155,17 +136,10 @@ const codiff = {
   setDiffStyle: (value) => ipcRenderer.invoke('codiff:setDiffStyle', value),
   setShowOutdated: (value) => ipcRenderer.invoke('codiff:setShowOutdated', value),
   setWordWrap: (value) => ipcRenderer.invoke('codiff:setWordWrap', value),
-  sharePlan: (review) => ipcRenderer.invoke('codiff:sharePlan', review),
 
   resetCodeFontSize: () => ipcRenderer.invoke('codiff:resetCodeFontSize'),
-  saveMarkdownDocument: (request) => ipcRenderer.invoke('codiff:saveMarkdownDocument', request),
-  saveRepositoryFile: (request) => ipcRenderer.invoke('codiff:saveRepositoryFile', request),
-  savePlanReview: (review) => ipcRenderer.invoke('codiff:savePlanReview', review),
+
   showInFolder: (path) => ipcRenderer.invoke('codiff:showInFolder', path),
-  submitPullRequestComment: (request) =>
-    ipcRenderer.invoke('codiff:submitPullRequestComment', request),
-  submitPullRequestReview: (request) =>
-    ipcRenderer.invoke('codiff:submitPullRequestReview', request),
 };
 
 contextBridge.exposeInMainWorld('codiff', codiff);

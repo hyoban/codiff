@@ -31,7 +31,7 @@ export type CodiffKeymap = {
   diffSearch: KeyCombo;
   discardComment: KeyCombo;
   doneEditing: KeyCombo;
-  editFile: KeyCombo;
+
   fileFilter: KeyCombo;
   nextHunk: KeyComboBinding;
   nextSearchMatch: KeyCombo;

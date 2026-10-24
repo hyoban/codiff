@@ -6,7 +6,7 @@ const { getFingerprint, git } = require('./git-state/common.cjs');
 
 const FOCUSED_POLL_INTERVAL = 2500;
 const HIDDEN_POLL_INTERVAL = 30_000;
-const SELF_WRITE_CHECK_DELAY = 250;
+
 const VISIBLE_POLL_INTERVAL = 10_000;
 
 /** @param {string} path @param {string} [pathSeparator] */
@@ -170,38 +170,6 @@ const readRepositoryChangeSignature = async (launchPath, exactPaths = []) => {
   return readRepositoryWatcherSnapshot(repoRoot, exactPaths);
 };
 
-/**
- * @param {{head: string; pathSignatures: Record<string, string>}} left
- * @param {{head: string; pathSignatures: Record<string, string>; pathVersions?: Record<string, string>}} right
- * @param {ReadonlyMap<string, string>} expectedPathVersions
- */
-const repositoryWatcherSnapshotsMatchExpectedWrites = (left, right, expectedPathVersions) => {
-  if (left.head !== right.head) {
-    return false;
-  }
-
-  for (const [path, version] of expectedPathVersions) {
-    if (right.pathVersions?.[path] !== version.slice(0, 16)) {
-      return false;
-    }
-  }
-
-  const paths = new Set([
-    ...Object.keys(left.pathSignatures),
-    ...Object.keys(right.pathSignatures),
-  ]);
-  for (const path of paths) {
-    if (
-      !expectedPathVersions.has(normalizeRepositoryWatcherPath(path)) &&
-      left.pathSignatures[path] !== right.pathSignatures[path]
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-};
-
 /** @param {ReadonlyArray<{focused: boolean; visible: boolean}>} states */
 const getRepositoryWatcherPollInterval = (states) => {
   if (states.some(({ focused }) => focused)) {
@@ -225,18 +193,6 @@ const createRepositoryWatcherCoordinator = ({
   readSnapshot,
   setTimeoutImpl = setTimeout,
 }) => {
-  /**
-   * @typedef {{
-   *   checking: boolean;
-   *   pendingSelfWrites: Map<string, {completed: boolean; generation: number; ownerId: number; version?: string}>;
-   *   recheckRequested: boolean;
-   *   resetRequested: Set<number>;
-   *   root: string;
-   *   snapshot?: Awaited<ReturnType<typeof readSnapshot>>;
-   *   subscribers: Map<number, {changed: boolean; getState: () => {focused: boolean; visible: boolean}; notify: (root: string) => void; snapshot?: Awaited<ReturnType<typeof readSnapshot>>}>;
-   *   timer?: ReturnType<typeof setTimeout>;
-   * }} RepositoryWatcher
-   */
   /** @type {Map<string, RepositoryWatcher>} */
   const watchers = new Map();
   /** @type {Map<number, string>} */
@@ -303,33 +259,13 @@ const createRepositoryWatcherCoordinator = ({
     watcher.checking = true;
     const requestedResetIds = new Set([...watcher.resetRequested, ...resetIds]);
     watcher.resetRequested.clear();
-    const pendingSelfWrites = new Map(watcher.pendingSelfWrites);
+
     try {
       const snapshot = await readSnapshot(
         watcher.root,
-        pendingSelfWrites.keys(),
+        [],
         Object.keys(watcher.snapshot?.pathSignatures ?? {}),
       );
-      const pendingWritesChanged =
-        watcher.pendingSelfWrites.size !== pendingSelfWrites.size ||
-        [...pendingSelfWrites].some(
-          ([path, pendingWrite]) =>
-            watcher.pendingSelfWrites.get(path)?.generation !== pendingWrite.generation,
-        );
-      if (pendingWritesChanged) {
-        watcher.recheckRequested = true;
-        for (const id of requestedResetIds) {
-          watcher.resetRequested.add(id);
-        }
-        return;
-      }
-      if ([...pendingSelfWrites.values()].some(({ completed }) => !completed)) {
-        for (const id of requestedResetIds) {
-          watcher.resetRequested.add(id);
-        }
-        return;
-      }
-
       for (const [id, subscriber] of watcher.subscribers) {
         if (requestedResetIds.has(id) || subscriber.snapshot == null) {
           subscriber.changed = false;
@@ -340,16 +276,12 @@ const createRepositoryWatcherCoordinator = ({
           continue;
         }
 
-        const expectedPathVersions = new Map(
-          [...pendingSelfWrites]
-            .filter((entry) => entry[1].ownerId === id && entry[1].version)
-            .map(([path, pendingWrite]) => [path, /** @type {string} */ (pendingWrite.version)]),
-        );
         if (
-          repositoryWatcherSnapshotsMatchExpectedWrites(
-            subscriber.snapshot,
-            snapshot,
-            expectedPathVersions,
+          subscriber.snapshot.head === snapshot.head &&
+          Object.keys(subscriber.snapshot.pathSignatures).length ===
+            Object.keys(snapshot.pathSignatures).length &&
+          Object.entries(subscriber.snapshot.pathSignatures).every(
+            ([path, signature]) => snapshot.pathSignatures[path] === signature,
           )
         ) {
           subscriber.snapshot = snapshot;
@@ -360,18 +292,9 @@ const createRepositoryWatcherCoordinator = ({
       }
 
       watcher.snapshot = snapshot;
-      for (const [path, pendingWrite] of pendingSelfWrites) {
-        const currentWrite = watcher.pendingSelfWrites.get(path);
-        if (pendingWrite.completed && currentWrite?.generation === pendingWrite.generation) {
-          watcher.pendingSelfWrites.delete(path);
-        }
-      }
     } finally {
       watcher.checking = false;
-      if (watcher.pendingSelfWrites.size > 0) {
-        watcher.recheckRequested = false;
-        schedule(watcher, SELF_WRITE_CHECK_DELAY);
-      } else if (watcher.recheckRequested || watcher.resetRequested.size > 0) {
+      if (watcher.recheckRequested || watcher.resetRequested.size > 0) {
         watcher.recheckRequested = false;
         schedule(watcher, 0);
       } else {
@@ -393,11 +316,6 @@ const createRepositoryWatcherCoordinator = ({
     }
     watcher.subscribers.delete(id);
     watcher.resetRequested.delete(id);
-    for (const [path, pendingWrite] of watcher.pendingSelfWrites) {
-      if (pendingWrite.ownerId === id) {
-        watcher.pendingSelfWrites.delete(path);
-      }
-    }
     if (watcher.subscribers.size === 0) {
       clearTimer(watcher);
       watchers.delete(root);
@@ -425,7 +343,7 @@ const createRepositoryWatcherCoordinator = ({
       if (!watcher) {
         watcher = {
           checking: false,
-          pendingSelfWrites: new Map(),
+
           recheckRequested: false,
           resetRequested: new Set(),
           root: subscriber.root,
@@ -448,28 +366,6 @@ const createRepositoryWatcherCoordinator = ({
       }
     },
 
-    /** @param {number} id @param {string} path */
-    beginWrite(id, path) {
-      const root = subscriberRoots.get(id);
-      const watcher = root ? watchers.get(root) : undefined;
-      const subscriber = watcher?.subscribers.get(id);
-      if (!watcher || !subscriber || subscriber.changed) {
-        return null;
-      }
-
-      const normalizedPath = normalizeRepositoryWatcherPath(path);
-      const generation = (watcher.pendingSelfWrites.get(normalizedPath)?.generation ?? 0) + 1;
-      watcher.pendingSelfWrites.set(normalizedPath, {
-        completed: false,
-        generation,
-        ownerId: id,
-      });
-      if (watcher.checking) {
-        watcher.recheckRequested = true;
-      }
-      return { generation, path: normalizedPath, root };
-    },
-
     /** @param {number} id */
     async checkNow(id) {
       const root = subscriberRoots.get(id);
@@ -480,26 +376,6 @@ const createRepositoryWatcherCoordinator = ({
     },
 
     detach,
-
-    /** @param {{generation: number; path: string; root: string} | null} token @param {string | null} version */
-    finishWrite(token, version) {
-      if (!token) {
-        return;
-      }
-      const watcher = watchers.get(token.root);
-      const pendingWrite = watcher?.pendingSelfWrites.get(token.path);
-      if (!watcher || pendingWrite?.generation !== token.generation) {
-        return;
-      }
-
-      if (version) {
-        pendingWrite.completed = true;
-        pendingWrite.version = version;
-      } else {
-        watcher.pendingSelfWrites.delete(token.path);
-      }
-      schedule(watcher, SELF_WRITE_CHECK_DELAY);
-    },
 
     /** @param {number} id */
     focus(id) {
@@ -546,5 +422,4 @@ module.exports = {
   parseRepositoryWatcherStatus,
   readRepositoryChangeSignature,
   readRepositoryWatcherSnapshot,
-  repositoryWatcherSnapshotsMatchExpectedWrites,
 };

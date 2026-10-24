@@ -9,12 +9,10 @@ type ReloadSelectionFile = {
   status: GitFileStatus;
 };
 
-export type ReloadMainMode = 'commit' | 'review';
-
 type ReloadSelection = {
   files: ReadonlyArray<ReloadSelectionFile>;
   historySource?: ReviewSource | null;
-  mainMode?: ReloadMainMode;
+
   root: string;
   selectedPath: string | null;
   source: ReviewSource;
@@ -96,7 +94,6 @@ const isReloadSelection = (value: unknown): value is ReloadSelection =>
   Array.isArray(value.files) &&
   value.files.every(isReloadSelectionFile) &&
   (value.historySource == null || isReviewSource(value.historySource)) &&
-  (value.mainMode == null || value.mainMode === 'commit' || value.mainMode === 'review') &&
   typeof value.root === 'string' &&
   (value.selectedPath == null || typeof value.selectedPath === 'string') &&
   isReviewSource(value.source);
@@ -196,16 +193,10 @@ export const getReloadHistorySource = (
   state: RepositoryState,
 ): ReviewSource | null => getMatchingSelection(selection, state)?.historySource ?? null;
 
-export const getReloadMainMode = (
-  selection: ReloadSelection | null,
-  state: RepositoryState,
-): ReloadMainMode | null => getMatchingSelection(selection, state)?.mainMode ?? null;
-
 export const writeReloadSelection = (
   state: RepositoryState | null,
   selectedPath: string | null,
   historySource: ReviewSource | null = null,
-  mainMode: ReloadMainMode = 'review',
 ) => {
   const storage = getStorage();
   if (!storage || !state) {
@@ -222,7 +213,7 @@ export const writeReloadSelection = (
           status: file.status,
         })),
         historySource,
-        mainMode,
+
         root: state.root,
         selectedPath,
         source: state.source,

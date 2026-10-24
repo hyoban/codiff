@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { chmod, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -48,10 +47,7 @@ type GitStateModule = {
       isResolved?: boolean;
     }>,
   ) => Set<number>;
-  createPullRequestHistoryFetchRefspecs: (
-    pullRequest: { number: number; owner: string; repo: string; url: string },
-    metadata: { base?: { ref?: string; sha?: string } },
-  ) => ReadonlyArray<string>;
+
   createPullRequestSection: (
     pullRequest: { number: number; owner: string; repo: string; url: string },
     file: { filename: string; patch?: string; previous_filename?: string; status: string },
@@ -85,7 +81,7 @@ type GitStateModule = {
   ) => Promise<{ entries: ReadonlyArray<unknown>; root: string }>;
   normalizeGitHubPullRequestCommit: (commit: Record<string, unknown>) => unknown;
   normalizeGitHubReviewComment: (comment: Record<string, unknown>) => unknown;
-  normalizePullRequestComment: (comment: Record<string, unknown>) => Record<string, unknown>;
+
   parseGitHubPullRequestUrl: (value: string) => {
     number: number;
     owner: string;
@@ -93,7 +89,7 @@ type GitStateModule = {
     url: string;
   };
   parseStatus: (raw: string) => Array<StatusEntry>;
-  PENDING_REVIEW_COMMENT_ERROR: string;
+
   readDiffSectionContent: (
     launchPath: string,
     request: DiffSectionContentRequest,
@@ -120,18 +116,7 @@ type GitStateModule = {
     comments: ReadonlyArray<Record<string, unknown>>,
     resolvedCommentIds: ReadonlySet<number>,
   ) => Array<Record<string, unknown>>;
-  submitPullRequestComment: (
-    launchPath: string,
-    request: {
-      comment: {
-        body: string;
-        filePath: string;
-        lineNumber: number;
-        side: 'additions' | 'deletions';
-      };
-      source: Extract<ReviewSource, { type: 'pull-request' }>;
-    },
-  ) => Promise<Record<string, unknown>>;
+
   validateRepositoryPath: (path: unknown) => string;
 };
 
@@ -141,17 +126,17 @@ const { readGeneratedAttributeStates } =
   require('../../electron/generated-files.cjs') as GeneratedFilesModule;
 const {
   collectResolvedReviewCommentIds,
-  createPullRequestHistoryFetchRefspecs,
+
   createPullRequestSection,
   createPullRequestSource,
   getPullRequestHeadImageSource,
   listRepositoryHistory,
   normalizeGitHubPullRequestCommit,
   normalizeGitHubReviewComment,
-  normalizePullRequestComment,
+
   parseGitHubPullRequestUrl,
   parseStatus,
-  PENDING_REVIEW_COMMENT_ERROR,
+
   readDiffSectionContent,
   readRepositoryChangeSignature,
   readRepositoryState,
@@ -159,7 +144,7 @@ const {
   readWorkingTreeState,
   resolvePullRequestContentRefs,
   selectUnresolvedReviewComments,
-  submitPullRequestComment,
+
   validateRepositoryPath,
 } = require('../../electron/git-state.cjs') as GitStateModule;
 
@@ -181,94 +166,6 @@ const writeRepoFile = async (repo: string, path: string, contents: string | Uint
 const commitAll = async (repo: string, message: string) => {
   await git(repo, ['add', '--all']);
   await git(repo, ['commit', '-m', message]);
-};
-
-const withFakeGitHub = async (
-  mode: 'diagnosis-fails' | 'no-pending-review' | 'pending-review' | 'success',
-  callback: (repo: string, readCalls: () => ReadonlyArray<ReadonlyArray<string>>) => Promise<void>,
-) => {
-  await using repoDirectory = await createTemporaryDirectory('codiff-git-state-');
-  const repo = await realpath(repoDirectory.path);
-  await git(repo, ['init']);
-  await using fakeBinDirectory = await createTemporaryDirectory('codiff-github-');
-  const fakeGh = join(fakeBinDirectory.path, 'gh');
-  const callsPath = join(fakeBinDirectory.path, 'calls.jsonl');
-
-  await git(repo, ['remote', 'add', 'origin', 'https://github.com/octo/example.git']);
-  await writeFile(
-    fakeGh,
-    `#!/usr/bin/env node
-const { appendFileSync } = require('node:fs');
-const args = process.argv.slice(2);
-let input = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => { input += chunk; });
-process.stdin.on('end', () => {
-  appendFileSync(process.env.CODIFF_GITHUB_TEST_CALLS, JSON.stringify({ args, input }) + '\\n');
-  const endpoint = args.find((argument) => argument.startsWith('repos/')) || '';
-  if (endpoint.endsWith('/comments')) {
-    if (process.env.CODIFF_GITHUB_TEST_MODE === 'success') {
-      process.stdout.write(JSON.stringify({
-        body: 'Keep this comment.',
-        created_at: '2026-07-10T12:00:00Z',
-        html_url: 'https://github.com/octo/example/pull/118#discussion_r1',
-        id: 1,
-        line: 1,
-        path: 'src/app.ts',
-        side: 'RIGHT',
-        user: { login: 'octocat' },
-      }));
-      return;
-    }
-    process.stderr.write('gh: Validation Failed (HTTP 422)\\n');
-    process.exitCode = 1;
-    return;
-  }
-  if (endpoint.includes('/reviews?')) {
-    if (process.env.CODIFF_GITHUB_TEST_MODE === 'diagnosis-fails') {
-      process.stderr.write('gh: review lookup failed\\n');
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(
-      process.env.CODIFF_GITHUB_TEST_MODE === 'pending-review'
-        ? '[[{"id": 7, "state": "PENDING"}]]'
-        : '[[]]',
-    );
-    return;
-  }
-  process.stdout.write(JSON.stringify({ head: { sha: 'head-sha' } }));
-});
-`,
-  );
-  await chmod(fakeGh, 0o755);
-  await using _environment = createTemporaryEnvironment({
-    CODIFF_GITHUB_TEST_CALLS: callsPath,
-    CODIFF_GITHUB_TEST_MODE: mode,
-    PATH: `${fakeBinDirectory.path}:${process.env.PATH ?? ''}`,
-  });
-
-  await callback(repo, () =>
-    readFileSync(callsPath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => (JSON.parse(line) as { args: ReadonlyArray<string> }).args),
-  );
-};
-
-const pullRequestCommentRequest = {
-  comment: {
-    body: 'Keep this comment.',
-    filePath: 'src/app.ts',
-    lineNumber: 1,
-    side: 'additions' as const,
-  },
-  source: {
-    provider: 'github' as const,
-    type: 'pull-request' as const,
-    url: 'https://github.com/octo/example/pull/118',
-  },
 };
 
 const withRepo = async (run: (repo: string) => Promise<void>) => {
@@ -550,28 +447,6 @@ test('validateRepositoryPath rejects traversal segments', () => {
   }
 });
 
-test('createPullRequestHistoryFetchRefspecs fetches PR and base refs into Codiff refs', () => {
-  expect(
-    createPullRequestHistoryFetchRefspecs(
-      {
-        number: 25,
-        owner: 'nkzw-tech',
-        repo: 'codiff',
-        url: 'https://github.com/nkzw-tech/codiff/pull/25',
-      },
-      {
-        base: {
-          ref: 'main',
-          sha: 'base-sha',
-        },
-      },
-    ),
-  ).toEqual([
-    '+refs/pull/25/head:refs/codiff/pull-requests/25/head',
-    '+refs/heads/main:refs/codiff/pull-requests/25/base',
-  ]);
-});
-
 const pullRequestFixture = {
   number: 7,
   owner: 'nkzw-tech',
@@ -729,17 +604,17 @@ test('resolvePullRequestContentRefs resolves the diff against the merge base', a
     await git(repo, ['update-ref', 'refs/codiff/pull-requests/7/base', baseTip]);
 
     const refs = await resolvePullRequestContentRefs(repo, pullRequestFixture, {
-      base: { ref: 'main' },
+      base: { ref: 'main', sha: baseTip },
       head: { sha: headSha },
     });
 
-    expect(refs).toEqual({ base: mergeBase, head: 'refs/codiff/pull-requests/7/head' });
+    expect(refs).toEqual({ base: mergeBase, head: headSha });
     // The base tip is intentionally not used; only the PR's own changes show.
     expect(refs?.base).not.toBe(baseTip);
   });
 });
 
-test('resolvePullRequestContentRefs refetches when the fetched base no longer matches the base sha', async () => {
+test('resolvePullRequestContentRefs returns no context when the current base object is missing', async () => {
   await withRepo(async (repo) => {
     await writeRepoFile(repo, 'file.txt', 'base\n');
     await commitAll(repo, 'base');
@@ -757,8 +632,7 @@ test('resolvePullRequestContentRefs refetches when the fetched base no longer ma
 
     // GitHub reports a base sha that no longer matches the fetched base ref (the
     // base branch moved or the pull request was retargeted). Resolution must
-    // refetch rather than diff against the stale local base; with no remote
-    // configured here the refetch fails and resolution reports it cannot resolve.
+    // return no context instead of fetching or diffing against stale refs.
     const refs = await resolvePullRequestContentRefs(repo, pullRequestFixture, {
       base: { ref: 'main', sha: '0'.repeat(40) },
       head: { sha: headSha },
@@ -979,68 +853,6 @@ test('normalizeGitHubPullRequestCommit reads GitHub PR commit metadata', () => {
     ref: 'commit-sha',
     scope: 'pull-request',
     subject: 'Feature commit',
-  });
-});
-
-test('normalizePullRequestComment uses the start side for ranged comments', () => {
-  expect(
-    normalizePullRequestComment({
-      body: 'Check the old context.',
-      filePath: 'src/file.ts',
-      lineNumber: 8,
-      side: 'additions',
-      startLineNumber: 5,
-      startSide: 'deletions',
-    }),
-  ).toMatchObject({
-    body: 'Check the old context.',
-    line: 8,
-    path: 'src/file.ts',
-    side: 'RIGHT',
-    start_line: 5,
-    start_side: 'LEFT',
-  });
-});
-
-test('pull request comments explain when a pending GitHub review blocks submission', async () => {
-  await withFakeGitHub('pending-review', async (repo, readCalls) => {
-    await expect(submitPullRequestComment(repo, pullRequestCommentRequest)).rejects.toThrow(
-      PENDING_REVIEW_COMMENT_ERROR,
-    );
-
-    expect(
-      readCalls().some((args) =>
-        args.some((argument) => argument.includes('/reviews?per_page=100')),
-      ),
-    ).toBe(true);
-  });
-});
-
-test('pull request comments preserve GitHub validation errors when no pending review is found', async () => {
-  for (const mode of ['diagnosis-fails', 'no-pending-review'] as const) {
-    await withFakeGitHub(mode, async (repo) => {
-      await expect(submitPullRequestComment(repo, pullRequestCommentRequest)).rejects.toThrow(
-        'gh: Validation Failed (HTTP 422)',
-      );
-    });
-  }
-});
-
-test('successful pull request comments skip pending review diagnosis', async () => {
-  await withFakeGitHub('success', async (repo, readCalls) => {
-    await expect(submitPullRequestComment(repo, pullRequestCommentRequest)).resolves.toMatchObject({
-      body: 'Keep this comment.',
-      filePath: 'src/app.ts',
-      id: 'github:1',
-      lineNumber: 1,
-      side: 'additions',
-    });
-
-    expect(
-      readCalls().some((args) =>
-        args.some((argument) => argument.includes('/reviews?per_page=100')),
-      ),
-    ).toBe(false);
   });
 });
 

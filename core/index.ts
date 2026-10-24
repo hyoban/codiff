@@ -1,17 +1,9 @@
 export { defaultReviewPreferences } from './defaults.ts';
-export {
-  parsePlanShareManifest,
-  parsePlanShareUpload,
-  type PlanShareManifestV1,
-  type ShareUploader,
-} from './share.ts';
 export type {
   ChangedFile,
-  CodiffFeatureFlags,
   CodiffPreferences,
   DiffSection,
   GitIdentity,
-  PlanCommentThread,
   PullRequestCodeQualityFinding,
   PullRequestGeneralComment,
   PullRequestGeneralCommentThread,
@@ -25,7 +17,5 @@ export type {
   ReviewPreferences,
   RepositoryState,
   ReviewSource,
-  SharePlanResult,
-  SharedPlanSnapshot,
   ReviewHunk,
 } from './types.ts';

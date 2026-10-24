@@ -1,6 +1,6 @@
 // @ts-check
 
-const { createHash } = require('node:crypto');
+const {} = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { homedir } = require('node:os');
 const { join } = require('node:path');
@@ -198,10 +198,6 @@ const mergeRequestEndpoint = (mergeRequest, suffix = '') =>
     mergeRequest.number
   }${suffix}`;
 
-/** @param {{number: number; projectPath: string}} mergeRequest @param {string} threadId */
-const getGitLabDiscussionReplyEndpoint = (mergeRequest, threadId) =>
-  mergeRequestEndpoint(mergeRequest, `/discussions/${encodeURIComponent(threadId)}/notes`);
-
 /** @param {string} repoRoot @param {ReturnType<typeof parseGitLabMergeRequestUrl>} mergeRequest */
 const selectMergeRequestRemote = (repoRoot, mergeRequest) => {
   const remote = readReviewRemotes(repoRoot)
@@ -294,29 +290,6 @@ const normalizeGitLabReviewComment = (note, url) => {
   };
 };
 
-/** @param {any} note @param {PullRequestReviewComment} submittedComment @param {string} url */
-const normalizeSubmittedGitLabReviewComment = (note, submittedComment, url) => {
-  const normalized = normalizeGitLabReviewComment(note, url);
-  if (normalized) {
-    return normalized;
-  }
-  if (!note?.body || typeof note.id !== 'number') {
-    return null;
-  }
-  return {
-    ...submittedComment,
-    author: {
-      avatarUrl: note.author?.avatar_url,
-      login: note.author?.username || note.author?.name || 'GitLab user',
-      url: note.author?.web_url,
-    },
-    body: note.body,
-    id: `gitlab:${note.id}`,
-    submittedAt: note.created_at,
-    url: `${url}#note_${note.id}`,
-  };
-};
-
 /** @param {string} repoRoot @param {ReturnType<typeof parseGitLabMergeRequestUrl>} mergeRequest */
 const readMergeRequestComments = async (repoRoot, mergeRequest) => {
   const discussions = parseGlabJsonPages(
@@ -356,48 +329,14 @@ const createMergeRequestSource = (mergeRequest, metadata) => ({
   url: metadata.web_url || mergeRequest.url,
 });
 
-/** @param {ReturnType<typeof parseGitLabMergeRequestUrl>} mergeRequest @param {any} metadata */
-const createMergeRequestFetchRefspecs = (mergeRequest, metadata) => [
-  `+refs/merge-requests/${mergeRequest.number}/head:refs/codiff/merge-requests/${mergeRequest.number}/head`,
-  ...(metadata.target_branch
-    ? [
-        `+refs/heads/${metadata.target_branch}:refs/codiff/merge-requests/${mergeRequest.number}/base`,
-      ]
-    : []),
-];
-
-/** @param {string} repoRoot @param {any} remote @param {any} mergeRequest @param {any} metadata */
-const fetchMergeRequestRefs = (repoRoot, remote, mergeRequest, metadata) =>
-  git(repoRoot, [
-    'fetch',
-    '--no-tags',
-    remote.name,
-    ...createMergeRequestFetchRefspecs(mergeRequest, metadata),
-  ]);
-
 /** @param {string} repoRoot @param {any} mergeRequest @param {any} metadata */
-const resolveMergeRequestContentRefs = async (repoRoot, mergeRequest, metadata) => {
-  const head = `refs/codiff/merge-requests/${mergeRequest.number}/head`;
-  const base = `refs/codiff/merge-requests/${mergeRequest.number}/base`;
-  const localHead = (await gitOrEmpty(repoRoot, ['rev-parse', '--verify', '--quiet', head])).trim();
-  const localBase = (await gitOrEmpty(repoRoot, ['rev-parse', '--verify', '--quiet', base])).trim();
-  if (!localHead || !localBase || (metadata.sha && localHead !== metadata.sha)) {
-    await fetchMergeRequestRefs(
-      repoRoot,
-      selectMergeRequestRemote(repoRoot, mergeRequest),
-      mergeRequest,
-      metadata,
-    );
-  }
-  const metadataBase = metadata.diff_refs?.base_sha;
-  if (
-    metadataBase &&
-    (await gitOrEmpty(repoRoot, ['rev-parse', '--verify', '--quiet', `${metadataBase}^{commit}`]))
-  ) {
-    return { base: metadataBase, head };
-  }
-  const mergeBase = (await gitOrEmpty(repoRoot, ['merge-base', base, head])).trim();
-  return mergeBase ? { base: mergeBase, head } : null;
+const resolveMergeRequestContentRefs = async (repoRoot, _mergeRequest, metadata) => {
+  const head = metadata.diff_refs?.head_sha ?? metadata.sha;
+  const base = metadata.diff_refs?.base_sha;
+  if (!head || !base) return null;
+  const headExists = (await gitOrEmpty(repoRoot, ['cat-file', '-t', head])).trim() === 'commit';
+  const baseExists = (await gitOrEmpty(repoRoot, ['cat-file', '-t', base])).trim() === 'commit';
+  return headExists && baseExists ? { base, head } : null;
 };
 
 /** @param {string} launchPath @param {Extract<ReviewSource, {type: 'pull-request'}>} source */
@@ -537,185 +476,6 @@ const listMergeRequestHistory = async (launchPath, source, limit = 200) => {
   };
 };
 
-/** @param {string} path @param {number | undefined} oldLine @param {number | undefined} newLine */
-const getGitLabLineCode = (path, oldLine, newLine) =>
-  `${createHash('sha1').update(path).digest('hex')}_${oldLine || 0}_${newLine || 0}`;
-
-/** @param {string} diff */
-const createGitLabDiffLineMap = (diff) => {
-  const lines = new Map();
-  let oldLine = 0;
-  let newLine = 0;
-  for (const line of diff.split('\n')) {
-    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunk) {
-      oldLine = Number(hunk[1]);
-      newLine = Number(hunk[2]);
-    } else if (line.startsWith('+') && !line.startsWith('+++')) {
-      lines.set(`additions:${newLine}`, { newLine });
-      newLine += 1;
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
-      lines.set(`deletions:${oldLine}`, { oldLine });
-      oldLine += 1;
-    } else if (oldLine > 0 && newLine > 0 && !line.startsWith('\\')) {
-      const value = { newLine, oldLine };
-      lines.set(`additions:${newLine}`, value);
-      lines.set(`deletions:${oldLine}`, value);
-      oldLine += 1;
-      newLine += 1;
-    }
-  }
-  return lines;
-};
-
-/** @param {PullRequestReviewComment} comment @param {any} metadata @param {any} [diff] */
-const createGitLabPosition = (comment, metadata, diff) => {
-  const oldPath = diff?.old_path || comment.filePath;
-  const newPath = diff?.new_path || comment.filePath;
-  if (comment.anchor === 'file' || comment.lineNumber == null || comment.side == null) {
-    return {
-      base_sha: metadata.diff_refs?.base_sha,
-      head_sha: metadata.diff_refs?.head_sha || metadata.sha,
-      new_path: newPath,
-      old_path: oldPath,
-      position_type: 'file',
-      start_sha: metadata.diff_refs?.start_sha,
-    };
-  }
-
-  const lineMap = createGitLabDiffLineMap(diff?.diff || '');
-  const endLines = lineMap.get(`${comment.side}:${comment.lineNumber}`) || {
-    ...(comment.side === 'deletions'
-      ? { oldLine: comment.lineNumber }
-      : { newLine: comment.lineNumber }),
-  };
-  const position = {
-    base_sha: metadata.diff_refs?.base_sha,
-    head_sha: metadata.diff_refs?.head_sha || metadata.sha,
-    new_path: newPath,
-    old_path: oldPath,
-    position_type: 'text',
-    start_sha: metadata.diff_refs?.start_sha,
-    ...(endLines.oldLine ? { old_line: endLines.oldLine } : {}),
-    ...(endLines.newLine ? { new_line: endLines.newLine } : {}),
-  };
-  if (typeof comment.startLineNumber === 'number') {
-    const startSide = comment.startSide ?? comment.side;
-    const startLines = lineMap.get(`${startSide}:${comment.startLineNumber}`) || {
-      ...(startSide === 'deletions'
-        ? { oldLine: comment.startLineNumber }
-        : { newLine: comment.startLineNumber }),
-    };
-    position.line_range = {
-      end: {
-        line_code: getGitLabLineCode(newPath, endLines.oldLine, endLines.newLine),
-        ...(endLines.oldLine ? { old_line: endLines.oldLine } : {}),
-        ...(endLines.newLine ? { new_line: endLines.newLine } : {}),
-        type: comment.side === 'deletions' ? 'old' : 'new',
-      },
-      start: {
-        line_code: getGitLabLineCode(newPath, startLines.oldLine, startLines.newLine),
-        ...(startLines.oldLine ? { old_line: startLines.oldLine } : {}),
-        ...(startLines.newLine ? { new_line: startLines.newLine } : {}),
-        type: startSide === 'deletions' ? 'old' : 'new',
-      },
-    };
-  }
-  return position;
-};
-
-/** @param {unknown} event */
-const getGitLabReviewQuickAction = (event) => {
-  if (event === 'APPROVE') {
-    return '/submit_review approve';
-  }
-  if (event === 'REQUEST_CHANGES') {
-    return '/submit_review request_changes';
-  }
-  throw new Error(`GitLab merge request reviews do not support ${String(event)}.`);
-};
-
-/** @param {string} launchPath @param {any} request */
-const submitMergeRequestComment = async (launchPath, request) => {
-  const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
-  const mergeRequest = parseGitLabMergeRequestUrl(request.source.url);
-  selectMergeRequestRemote(repoRoot, mergeRequest);
-  if (request.comment.threadId) {
-    const note = JSON.parse(
-      await glabApi(
-        repoRoot,
-        mergeRequest,
-        [
-          '--method',
-          'POST',
-          '--input',
-          '-',
-          getGitLabDiscussionReplyEndpoint(mergeRequest, request.comment.threadId),
-        ],
-        { body: request.comment.body },
-      ),
-    );
-    const comment = normalizeSubmittedGitLabReviewComment(note, request.comment, mergeRequest.url);
-    if (!comment) {
-      throw new Error('GitLab accepted the reply but did not return comment metadata.');
-    }
-    return comment;
-  }
-  const metadata = await readMergeRequestMetadata(repoRoot, mergeRequest);
-  const diffs = await readMergeRequestDiffs(repoRoot, mergeRequest);
-  const diff = diffs.find((candidate) => candidate.new_path === request.comment.filePath);
-  const discussion = JSON.parse(
-    await glabApi(
-      repoRoot,
-      mergeRequest,
-      ['--method', 'POST', '--input', '-', mergeRequestEndpoint(mergeRequest, '/discussions')],
-      {
-        body: request.comment.body,
-        position: createGitLabPosition(request.comment, metadata, diff),
-      },
-    ),
-  );
-  const comment = normalizeSubmittedGitLabReviewComment(
-    discussion.notes?.[0],
-    request.comment,
-    mergeRequest.url,
-  );
-  if (!comment) {
-    throw new Error('GitLab accepted the comment but did not return comment metadata.');
-  }
-  return comment;
-};
-
-/** @param {string} launchPath @param {any} request */
-const submitMergeRequestReview = async (launchPath, request) => {
-  const quickAction = getGitLabReviewQuickAction(request.event);
-  const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
-  const mergeRequest = parseGitLabMergeRequestUrl(request.source.url);
-  selectMergeRequestRemote(repoRoot, mergeRequest);
-  const metadata = await readMergeRequestMetadata(repoRoot, mergeRequest);
-  const diffs = await readMergeRequestDiffs(repoRoot, mergeRequest);
-  for (const comment of request.comments) {
-    const diff = diffs.find((candidate) => candidate.new_path === comment.filePath);
-    await glabApi(
-      repoRoot,
-      mergeRequest,
-      ['--method', 'POST', '--input', '-', mergeRequestEndpoint(mergeRequest, '/draft_notes')],
-      {
-        note: comment.body,
-        position: createGitLabPosition(comment, metadata, diff),
-      },
-    );
-  }
-  await glabApi(
-    repoRoot,
-    mergeRequest,
-    ['--method', 'POST', '--input', '-', mergeRequestEndpoint(mergeRequest, '/notes')],
-    {
-      body: `${request.body ? `${request.body}\n\n` : ''}${quickAction}`,
-    },
-  );
-};
-
 /** @param {string} launchPath @param {Extract<ReviewSource, {type: 'pull-request'}>} source @param {string} requestedPath */
 const readMergeRequestImageContent = async (launchPath, source, requestedPath) => {
   try {
@@ -745,13 +505,9 @@ const readMergeRequestImageContent = async (launchPath, source, requestedPath) =
 };
 
 module.exports = {
-  createGitLabPosition,
-  createMergeRequestFetchRefspecs,
   listMergeRequestHistory,
   normalizeGitLabReviewComment,
   parseGitLabMergeRequestUrl,
   readMergeRequestImageContent,
   readMergeRequestState,
-  submitMergeRequestComment,
-  submitMergeRequestReview,
 };

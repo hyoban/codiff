@@ -1,10 +1,8 @@
 /** @vitest-environment jsdom */
-import { act, useState } from 'react';
+import { act } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
-import { createCodeEditingStore, type CodeEditingStore } from '../app/hooks/code-editing-store.ts';
-import type { CodeViewItemMetadata } from '../lib/app-types.ts';
 import { createChangedFile } from './helpers/fixtures.ts';
-import { renderReact, waitFor } from './helpers/react.tsx';
+import { renderReact } from './helpers/react.tsx';
 import {
   codeViewMock,
   resetCodeViewMock,
@@ -12,200 +10,10 @@ import {
 } from './helpers/review-code-view.tsx';
 
 const file = createChangedFile('core/a/long/directory/important-file.txt');
-const meta: CodeViewItemMetadata = {
-  blockId: 'source',
-  canEditMarkdown: false,
-  canRenderMarkdown: false,
-  comments: [],
-  file,
-  isCollapsed: false,
-  isMarkdownPreview: false,
-  isSelected: false,
-  isViewed: false,
-  lineCount: { additions: 1, countable: true, deletions: 1 },
-  reviewIdentity: { fingerprint: file.fingerprint, key: file.path },
-  section: file.sections[0]!,
-  sectionCount: 1,
-};
-let store: CodeEditingStore;
-const refresh = vi.fn(async () => true);
-
-beforeEach(() => {
-  resetCodeViewMock();
-  store = createCodeEditingStore();
-  refresh.mockClear();
-  vi.stubGlobal('codiff', {
-    getRepositoryFile: vi.fn(),
-    saveRepositoryFile: vi.fn(async (request) => ({
-      document: { ...request, version: 'saved-version' },
-      status: 'saved',
-    })),
-  });
-});
-
+beforeEach(resetCodeViewMock);
 afterEach(() => {
-  store.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-});
-
-const startEditing = () => {
-  const item = codeViewMock.lastItems[0]!;
-  if (item.type !== 'diff') {
-    throw new Error('Expected an editable diff');
-  }
-  return store.start({
-    dirty: false,
-    document: { content: 'new\n', path: file.path, root: '/repo', version: 'version' },
-    hasChanges: false,
-    item: { ...item, annotations: [], edit: true },
-    metadata: meta,
-    originalContent: 'new\n',
-    originalDiff: item.fileDiff,
-    sourceKey: 'working-tree',
-  })!;
-};
-
-const headerButtons = (container: HTMLElement) => [
-  ...container.querySelectorAll<HTMLButtonElement>('.codiff-file-details button'),
-];
-
-test('Cancel precedes Done without destructive styling; typing and auto-save keep Revert red', async () => {
-  await using view = await renderReact(
-    <ReviewCodeViewHarness codeEditingStore={store} files={[file]} onRefreshMarkdown={refresh} />,
-  );
-  let entry: ReturnType<typeof startEditing>;
-  await act(async () => {
-    entry = startEditing();
-  });
-  const labels = () => headerButtons(view.container).map((button) => button.textContent);
-  expect(labels().indexOf('Cancel')).toBeLessThan(labels().indexOf('Done'));
-  expect(
-    headerButtons(view.container)
-      .find((button) => button.textContent === 'Cancel')
-      ?.classList.contains('codiff-button-destructive'),
-  ).toBe(false);
-  await act(async () => entry!.setDraft('typed\n'));
-  const revert = () =>
-    headerButtons(view.container).find((button) => button.textContent === 'Revert');
-  expect(labels().indexOf('Revert')).toBeLessThan(labels().indexOf('Done'));
-  expect(revert()?.classList.contains('codiff-button-destructive')).toBe(true);
-  await act(async () => {
-    await entry!.flush();
-  });
-  expect(revert()).toBeDefined();
-  expect(entry!.getSnapshot()?.dirty).toBe(false);
-  expect(view.container.querySelector('.codiff-status-badge')).toBeNull();
-  await act(async () => revert()!.click());
-  expect(window.codiff.saveRepositoryFile).toHaveBeenLastCalledWith(
-    expect.objectContaining({ baseVersion: 'saved-version', content: 'new\n' }),
-  );
-  expect(store.getSnapshot().size).toBe(0);
-});
-
-test('Cancel without edits closes without writing or refreshing the review', async () => {
-  await using view = await renderReact(
-    <ReviewCodeViewHarness codeEditingStore={store} files={[file]} onRefreshMarkdown={refresh} />,
-  );
-  await act(async () => {
-    startEditing();
-  });
-  await act(async () =>
-    headerButtons(view.container)
-      .find((button) => button.textContent === 'Cancel')!
-      .click(),
-  );
-  expect(window.codiff.saveRepositoryFile).not.toHaveBeenCalled();
-  expect(refresh).not.toHaveBeenCalled();
-  expect(store.getSnapshot().size).toBe(0);
-});
-
-test.each(['MacIntel', 'Win32'])(
-  'the edit shortcut opens the highlighted file and expands it on %s',
-  async (platform) => {
-    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue(platform);
-    const otherFile = createChangedFile('other.txt');
-    const selectedFile = {
-      ...file,
-      sections: [...createChangedFile(file.path, { kind: 'staged' }).sections, ...file.sections],
-    };
-    vi.mocked(window.codiff.getRepositoryFile).mockResolvedValue({
-      content: 'new\n',
-      path: file.path,
-      root: '/repo',
-      version: 'version',
-    });
-    const onToggleCollapsed = vi.fn();
-    function CollapsedHarness() {
-      const [collapsed, setCollapsed] = useState(new Set([file.path]));
-      return (
-        <ReviewCodeViewHarness
-          codeEditingStore={store}
-          collapsed={collapsed}
-          files={[otherFile, selectedFile]}
-          onLoadSectionContents={async () => ({
-            newFile: { contents: 'new\n', name: file.path },
-            oldFile: { contents: 'old\n', name: file.path },
-          })}
-          onToggleCollapsed={(...args) => {
-            onToggleCollapsed(...args);
-            setCollapsed(new Set());
-          }}
-          selectedPath={file.path}
-        />
-      );
-    }
-    await using view = await renderReact(<CollapsedHarness />);
-    await act(async () => {
-      const event = new KeyboardEvent('keydown', {
-        cancelable: true,
-        ctrlKey: platform === 'Win32',
-        key: 'e',
-        metaKey: platform === 'MacIntel',
-      });
-      window.dispatchEvent(event);
-      expect(event.defaultPrevented).toBe(true);
-    });
-    await waitFor(() => expect(store.hasFile(file.path)).toBe(true));
-    expect(store.hasFile(otherFile.path)).toBe(false);
-    expect(window.codiff.getRepositoryFile).toHaveBeenCalledWith(file.path);
-    expect(onToggleCollapsed).toHaveBeenCalledWith(selectedFile, true, file.path);
-    expect(view.container.querySelector(`[aria-label="Done editing ${file.path}"]`)).not.toBeNull();
-  },
-);
-
-test('the edit shortcut respects read-only reviews and native inputs', async () => {
-  vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
-  const props = {
-    codeEditingStore: store,
-    files: [file],
-    onLoadSectionContents: async () => ({
-      newFile: { contents: 'new\n', name: file.path },
-      oldFile: { contents: 'old\n', name: file.path },
-    }),
-    selectedPath: file.path,
-  };
-  await using view = await renderReact(<ReviewCodeViewHarness {...props} isReadOnly />);
-  await act(async () => {
-    const event = new KeyboardEvent('keydown', { cancelable: true, key: 'e', metaKey: true });
-    window.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
-  });
-  await view.rerender(<ReviewCodeViewHarness {...props} />);
-  const input = document.createElement('input');
-  view.container.append(input);
-  await act(async () => {
-    const event = new KeyboardEvent('keydown', {
-      bubbles: true,
-      cancelable: true,
-      key: 'e',
-      metaKey: true,
-    });
-    input.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
-  });
-  expect(window.codiff.getRepositoryFile).not.toHaveBeenCalled();
-  expect(store.getSnapshot().size).toBe(0);
 });
 
 test('narrow pane layout and sticky header metrics resize together without losing the filename', async () => {
@@ -267,4 +75,29 @@ test('expandUnchanged only expands diffs when full file contents can be loaded',
     />,
   );
   expect(codeViewMock.lastOptions?.expandUnchanged).toBe(false);
+});
+
+test('working-tree diffs retain viewed state and external opening without inline editing', async () => {
+  const openFile = vi.fn();
+  await using view = await renderReact(
+    <ReviewCodeViewHarness files={[file]} onOpenFile={openFile} />,
+  );
+  expect(view.container.querySelector(`[aria-label="Edit ${file.path}"]`)).toBeNull();
+  expect(view.container.querySelector('.codiff-viewed-button')).not.toBeNull();
+  await act(async () =>
+    view.container
+      .querySelector<HTMLButtonElement>(`[aria-label="Open ${file.path} in editor"]`)
+      ?.click(),
+  );
+  expect(openFile).toHaveBeenCalledWith(file);
+  const event = new KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    ctrlKey: true,
+    key: 'e',
+    metaKey: true,
+  });
+  await act(async () => window.dispatchEvent(event));
+  expect(event.defaultPrevented).toBe(false);
+  expect(codeViewMock.lastItems.every((item) => !item.edit)).toBe(true);
 });

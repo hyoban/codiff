@@ -6,6 +6,7 @@ import reviewSource from '../electron/review-source.cjs';
 
 const { parseReviewUrl, resolveReviewUrl } = reviewSource;
 
+/** @type {Array<{argument?: string; consumesSource?: boolean; description: string; hidden?: boolean; name: string; short?: string; type: string}>} */
 export const flagDefinitions = [
   {
     argument: '<ref>',
@@ -34,23 +35,6 @@ export const flagDefinitions = [
   { description: 'Show this help message and exit.', name: 'help', short: 'h', type: 'boolean' },
 
   {
-    argument: '<file>',
-    consumesSource: true,
-    description: 'Edit a Markdown plan and wait until it is handed back.',
-    name: 'plan',
-    type: 'string',
-  },
-  {
-    description: 'Share a --plan file, then print its URL.',
-    name: 'share',
-    type: 'boolean',
-  },
-  {
-    hidden: true,
-    name: 'public',
-    type: 'boolean',
-  },
-  {
     description: 'Show version number and exit.',
     name: 'version',
     short: 'v',
@@ -70,8 +54,6 @@ const usageExamples = [
     description: 'Review the open pull request for a branch.',
   },
   { command: 'codiff mr 75', description: 'Review GitLab merge request !75.' },
-  { command: 'codiff --plan plan.md', description: 'Edit a plan and wait for handoff.' },
-  { command: 'codiff --plan plan.md --share', description: 'Share a Markdown plan.' },
 ];
 
 export const getReviewSource = ({
@@ -279,7 +261,6 @@ export const parseArguments = (args) => {
   let commitRef = typeof values.commit === 'string' ? values.commit : null;
   let branchRef = typeof values.branch === 'string' ? values.branch : null;
 
-  const planFilePath = typeof values.plan === 'string' ? values.plan : null;
   // `--completions` without a value parses as `true`; keep it as an empty shell
   // so the command can tell "no shell given" apart from "flag not used".
   const completionShell =
@@ -299,10 +280,7 @@ export const parseArguments = (args) => {
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
-    if (planFilePath) {
-      requestedPath ??= arg;
-      continue;
-    }
+
     const parsedPullRequestUrl = pullRequestUrl ? null : parsePullRequestUrlArgument(arg);
     if (parsedPullRequestUrl) {
       pullRequestUrl = parsedPullRequestUrl;
@@ -383,7 +361,7 @@ export const parseArguments = (args) => {
   }
 
   return {
-    ...(planFilePath ? { planFilePath: resolve(planFilePath) } : {}),
+    ...{},
     ...(branchRef ? { branchRef } : {}),
     ...(range ? { range } : {}),
     commitRef,
@@ -393,9 +371,9 @@ export const parseArguments = (args) => {
     pullRequestNumber,
     ...(pullRequestProvider ? { pullRequestProvider } : {}),
     pullRequestUrl,
-    ...(values.public === true ? { public: true } : {}),
+
     requestedPath: resolve(requestedPath ?? process.cwd()),
-    ...(values.share === true ? { share: true } : {}),
+
     version: values.version === true,
   };
 };

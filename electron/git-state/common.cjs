@@ -17,8 +17,6 @@ const execFileAsync = promisify(execFile);
  * @typedef {import('../../core/types.ts').PullRequestReviewComment} PullRequestReviewComment
  * @typedef {import('../../core/types.ts').RepositoryState} RepositoryState
  * @typedef {import('../../core/types.ts').ReviewSource} ReviewSource
- * @typedef {import('../../core/types.ts').SubmitPullRequestCommentRequest} SubmitPullRequestCommentRequest
- * @typedef {import('../../core/types.ts').SubmitPullRequestReviewRequest} SubmitPullRequestReviewRequest
  * @typedef {'staged' | 'unstaged'} WorkingTreeSectionKind
  * @typedef {{cacheKey: string; contents: string; name: string}} TextFile
  * @typedef {{reason: string; canLoad?: boolean; fileCount?: number; fingerprint?: string; limit?: number; loadState?: DiffSection['loadState']; size?: number}} DiffSummary
@@ -56,7 +54,7 @@ const getGravatarHash = (email) =>
  * @returns {Promise<string>}
  */
 const git = async (repoPath, args, options = {}) => {
-  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+  const { stdout } = await execFileAsync('git', ['--no-optional-locks', '-C', repoPath, ...args], {
     encoding: options.encoding || 'utf8',
     maxBuffer: 1024 * 1024 * 64,
   });
@@ -65,7 +63,7 @@ const git = async (repoPath, args, options = {}) => {
 
 /** @param {string} repoPath @param {ReadonlyArray<string>} args @returns {Promise<Buffer>} */
 const gitBuffer = async (repoPath, args) => {
-  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+  const { stdout } = await execFileAsync('git', ['--no-optional-locks', '-C', repoPath, ...args], {
     encoding: 'buffer',
     maxBuffer: 1024 * 1024 * 64,
   });
@@ -81,7 +79,7 @@ const gitBuffer = async (repoPath, args) => {
  */
 const gitBufferWithInput = (repoPath, args, input, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn('git', ['-C', repoPath, ...args], {
+    const child = spawn('git', ['--no-optional-locks', '-C', repoPath, ...args], {
       env: options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

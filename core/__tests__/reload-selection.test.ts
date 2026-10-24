@@ -8,7 +8,6 @@ import {
   getChangedPaths,
   getReloadDeltaPaths,
   getReloadHistorySource,
-  getReloadMainMode,
   getReloadSelectionPath,
   haveChangedFiles,
   haveReloadedFilesChanged,
@@ -86,22 +85,6 @@ test('reload selection preserves history source for the current source', () => {
   expect(getReloadHistorySource(selection, currentState)).toEqual(branchSource);
   expect(
     getReloadHistorySource(selection, {
-      ...currentState,
-      source: { ref: 'abc1234', type: 'commit' },
-    }),
-  ).toBeNull();
-});
-
-test('reload selection preserves the commit view for the current source', () => {
-  const changedFile = file('src/app.ts');
-  const currentState = state([changedFile]);
-
-  writeReloadSelection(currentState, changedFile.path, null, 'commit');
-
-  const selection = consumeReloadSelection();
-  expect(getReloadMainMode(selection, currentState)).toBe('commit');
-  expect(
-    getReloadMainMode(selection, {
       ...currentState,
       source: { ref: 'abc1234', type: 'commit' },
     }),

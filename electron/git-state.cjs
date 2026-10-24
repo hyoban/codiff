@@ -1,6 +1,6 @@
 // @ts-check
 
-const { git, gitOrEmpty, parseStatus, validateRepositoryPath } = require('./git-state/common.cjs');
+const { gitOrEmpty, parseStatus, validateRepositoryPath } = require('./git-state/common.cjs');
 const {
   listRepositoryHistory,
   readBranchImageContent,
@@ -12,41 +12,34 @@ const {
   readCommitImageContent,
   readCommitSectionContent,
   readCommitState,
-  readResolvedCommitState,
+
   readRangeImageContent,
   readRangeSectionContent,
   readRangeState,
 } = require('./git-state/commit.cjs');
 const {} = require('./repository-watcher.cjs');
 const {
-  PENDING_REVIEW_COMMENT_ERROR,
   collectResolvedReviewCommentIds,
-  createPullRequestHistoryFetchRefspecs,
+
   createPullRequestSection,
   createPullRequestSource,
   getPullRequestHeadImageSource,
   listPullRequestHistory,
   normalizeGitHubPullRequestCommit,
   normalizeGitHubReviewComment,
-  normalizePullRequestComment,
+
   parseGitHubPullRequestUrl,
   readPullRequestImageContent,
   readPullRequestState,
   resolvePullRequestContentRefs,
   selectUnresolvedReviewComments,
-  submitPullRequestComment,
-  submitPullRequestReview,
 } = require('./git-state/pull-request.cjs');
 const {
-  createGitLabPosition,
-  createMergeRequestFetchRefspecs,
   listMergeRequestHistory,
   normalizeGitLabReviewComment,
   parseGitLabMergeRequestUrl,
   readMergeRequestImageContent,
   readMergeRequestState,
-  submitMergeRequestComment,
-  submitMergeRequestReview,
 } = require('./git-state/merge-request.cjs');
 const { parseReviewUrl } = require('./review-source.cjs');
 const {
@@ -175,11 +168,8 @@ const readDiffImageContent = (launchPath, request) =>
             : readWorkingTreeDiffImageContent(launchPath, request);
 
 module.exports = {
-  PENDING_REVIEW_COMMENT_ERROR,
   collectResolvedReviewCommentIds,
-  createPullRequestHistoryFetchRefspecs,
-  createGitLabPosition,
-  createMergeRequestFetchRefspecs,
+
   createPullRequestSection,
   createPullRequestSource,
   getPullRequestHeadImageSource,
@@ -187,7 +177,7 @@ module.exports = {
   normalizeGitHubPullRequestCommit,
   normalizeGitHubReviewComment,
   normalizeGitLabReviewComment,
-  normalizePullRequestComment,
+
   parseStatus,
   parseGitHubPullRequestUrl,
   parseGitLabMergeRequestUrl,
@@ -203,15 +193,6 @@ module.exports = {
 
   readWorkingTreeState,
   resolvePullRequestContentRefs,
-  submitPullRequestComment: (launchPath, request) =>
-    (isGitLabReviewSource(request.source) ? submitMergeRequestComment : submitPullRequestComment)(
-      launchPath,
-      request,
-    ),
-  submitPullRequestReview: (launchPath, request) =>
-    (isGitLabReviewSource(request.source) ? submitMergeRequestReview : submitPullRequestReview)(
-      launchPath,
-      request,
-    ),
+
   validateRepositoryPath,
 };

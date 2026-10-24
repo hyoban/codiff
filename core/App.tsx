@@ -1,8 +1,7 @@
 import { ArrowSquareOutIcon as ArrowSquareOut } from '@phosphor-icons/react/ArrowSquareOut';
 import type { FileDiffLoadedFiles } from '@pierre/diffs';
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandBar } from './app/components/CommandBar.tsx';
-import { CommitView } from './app/components/CommitView.tsx';
 import { KeyboardShortcutsHelp } from './app/components/KeyboardShortcutsHelp.tsx';
 import { OpenReviewSourceDialog } from './app/components/OpenReviewSourceDialog.tsx';
 import { OpenReviewSourceMenu } from './app/components/OpenReviewSourceMenu.tsx';
@@ -10,8 +9,6 @@ import {
   CopyCommentsButton,
   DiffSearchPanel,
   FirstRunPanel,
-  isPullRequestReviewActionDisabled,
-  PullRequestReviewButtons,
   RepositoryChangeBanner,
   RepositoryLoadErrorPanel,
   ReviewSourceLoading,
@@ -22,9 +19,7 @@ import { ReviewTopBar } from './app/components/ReviewTopBar.tsx';
 import { Sidebar } from './app/components/Sidebar.tsx';
 import { useAppCommands } from './app/hooks/useAppCommands.ts';
 import { useAppKeyboardShortcuts } from './app/hooks/useAppKeyboardShortcuts.ts';
-import { useAppReview } from './app/hooks/useAppReview.ts';
 import { useAppReviewComments } from './app/hooks/useAppReviewComments.ts';
-import { createCodeEditingStore, useUnsavedCodeEditsGuard } from './app/hooks/useCodeEditing.ts';
 import { useDiffSearch } from './app/hooks/useDiffSearch.ts';
 import {
   getCodeFontLineHeight,
@@ -69,14 +64,12 @@ import {
   getChangedPaths,
   getReloadDeltaPaths,
   getReloadHistorySource,
-  getReloadMainMode,
   getReloadSelectionPath,
   writeReloadSelection,
 } from './lib/reload-selection.ts';
 import { resolveReviewCommandTarget } from './lib/review-command-target.ts';
 import {
   buildReviewCommentsMarkdown,
-  getRefreshedReviewComments,
   getReviewCommentsFromState,
   getVisibleReviewComments,
 } from './lib/review-comments.ts';
@@ -104,7 +97,6 @@ import { readViewed, writeViewed } from './lib/viewed.ts';
 import type {
   ChangedFile,
   CodiffLaunchOptions,
-  CodiffMarkdownDocument,
   CodiffPreferences,
   DefinitionCandidate,
   GitIdentity,
@@ -119,9 +111,6 @@ import type {
 const emptyReviewComments: ReadonlyArray<ReviewComment> = [];
 
 const disableCodeViewWorkerPool = process.env.NODE_ENV === 'test';
-const PlanEditorView = lazy(async () => ({
-  default: (await import('./app/components/PlanEditorView.tsx')).PlanEditorView,
-}));
 
 const getFailedSectionLoadState = (section: DiffSection): DiffSection =>
   isPatchOnlyDiffSection(section)
@@ -206,10 +195,7 @@ export default function App({
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [isWindowFullScreen, setIsWindowFullScreen] = useState(false);
   const [pendingSource, setPendingSource] = useState<ReviewSource | null>(null);
-  const [planDocument, setPlanDocument] = useState<CodiffMarkdownDocument | null>(null);
-  const [codeEditingStore] = useState(createCodeEditingStore);
-  useUnsavedCodeEditsGuard(codeEditingStore);
-  const [planLoadError, setPlanLoadError] = useState<string | null>(null);
+
   const [loadingSectionIds, setLoadingSectionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [openReviewSourceKind, setOpenReviewSourceKind] = useState<OpenReviewSourceKind | null>(
     null,
@@ -227,7 +213,7 @@ export default function App({
   const [terminalHelperStatus, setTerminalHelperStatus] = useState<TerminalHelperStatus>(
     defaultTerminalHelperStatus,
   );
-  const [sharePlanEnabled, setSharePlanEnabled] = useState(false);
+
   const historyRequestRef = useRef(0);
   const historySourceRef = useRef<ReviewSource | null>(null);
   const loadingSectionKeysRef = useRef<Set<string>>(new Set());
@@ -241,7 +227,7 @@ export default function App({
   const selectedPathRef = useRef<string | null>(null);
   const sourceRequestRef = useRef(0);
   const stateGenerationRef = useRef(0);
-  const markdownRefreshQueueRef = useRef<Promise<void>>(Promise.resolve());
+
   const viewedRef = useRef<Record<string, string>>({});
   const persistViewed = useCallback((nextViewed: Record<string, string>) => {
     const currentState = stateRef.current;
@@ -282,20 +268,16 @@ export default function App({
     deleteComment,
     focusCommentId,
     focusCommentRequest,
-    hasPendingReviewComments,
-    pullRequestReviewSubmitting,
+
     resetCommentFocus,
     reviewComments,
     reviewCommentsRef,
     setReviewComments,
-    submitPullRequestComment,
-    submitPullRequestReview,
+
     updateActiveReviewCommentDraft,
     updateComment,
   } = useAppReviewComments({
-    isReviewActionDisabled: isPullRequestReviewActionDisabled,
     onCommentFileChange: bumpItemVersion,
-    stateRef,
   });
   const collapseSidebar = useCallback(() => {
     setPanelVisible('files', false);
@@ -319,17 +301,7 @@ export default function App({
     position: preferences.sidebarPosition,
     readWidth: readHistoryWidth,
   });
-  const {
-    closeCommitView,
-    commitChanges,
-    commitDraft,
-    commitModel,
-    mainModeRef,
-    openCommitView,
-    setMainMode,
-    showCommitView,
-    subscribeToCommitOutput,
-  } = useAppReview({ state, stateRef });
+
   const [hunkNavigation, setHunkNavigation] = useState<{
     direction: 1 | -1;
     request: number;
@@ -497,78 +469,6 @@ export default function App({
     [],
   );
 
-  const refreshMarkdownFile = useCallback(
-    (file: ChangedFile) => {
-      const refresh = async () => {
-        const currentState = stateRef.current;
-        if (
-          !currentState ||
-          (currentState.source.type !== 'working-tree' &&
-            currentState.source.type !== 'branch-working-tree')
-        ) {
-          return true;
-        }
-        const sourceRequest = sourceRequestRef.current;
-        const stateGeneration = stateGenerationRef.current;
-        const sourceKey = getSourceKey(currentState.source);
-
-        try {
-          const nextState = await window.codiff.getRepositoryState(currentState.source);
-          const orderedState = {
-            ...nextState,
-            files: sortFiles(nextState.files),
-          };
-          if (
-            sourceRequestRef.current !== sourceRequest ||
-            stateGenerationRef.current !== stateGeneration ||
-            stateRef.current?.root !== currentState.root ||
-            getSourceKey(stateRef.current.source) !== sourceKey
-          ) {
-            return false;
-          }
-
-          const changedPaths = getChangedPaths(currentState.files, orderedState.files);
-          stateGenerationRef.current += 1;
-          stateRef.current = orderedState;
-          setState(orderedState);
-          setLocalChangesDetected(false);
-          setReviewComments((current) => getRefreshedReviewComments(orderedState, current));
-          setCollapsed((current) => {
-            const next = new Set(current);
-            for (const path of changedPaths) {
-              next.delete(path);
-            }
-            return next;
-          });
-          setSelectedPath((current) =>
-            current && orderedState.files.some((candidate) => candidate.path === current)
-              ? current
-              : (orderedState.files[0]?.path ?? null),
-          );
-          if (changedPaths.size === 0) {
-            bumpItemVersion(file.path);
-          } else {
-            for (const path of changedPaths) {
-              bumpItemVersion(path);
-            }
-          }
-          return true;
-        } catch {
-          setLocalChangesDetected(true);
-          return false;
-        }
-      };
-
-      const result = markdownRefreshQueueRef.current.then(refresh, refresh);
-      markdownRefreshQueueRef.current = result.then(
-        () => {},
-        () => {},
-      );
-      return result;
-    },
-    [bumpItemVersion, setCollapsed, setReviewComments, setSelectedPath],
-  );
-
   const scrollPathIntoReview = useCallback((path: string, behavior: ReviewScrollBehavior) => {
     setScrollTarget((current) => ({
       behavior,
@@ -604,7 +504,6 @@ export default function App({
 
   useEffect(() => {
     let canceled = false;
-    let loadingPlan = false;
 
     const load = async () => {
       const reloadSelection = consumeReloadSelection();
@@ -613,19 +512,6 @@ export default function App({
         return;
       }
       setLaunchOptions(nextLaunchOptions);
-
-      if (nextLaunchOptions.planFile) {
-        loadingPlan = true;
-        const nextPlanDocument = await window.codiff.getMarkdownDocument({
-          kind: 'plan',
-          path: nextLaunchOptions.planFile,
-        });
-        if (!canceled) {
-          setPlanDocument(nextPlanDocument);
-          setPlanLoadError(null);
-        }
-        return;
-      }
 
       void window.codiff
         .getTerminalHelperStatus()
@@ -697,13 +583,6 @@ export default function App({
       const nextViewed = usesViewedFileState(orderedState.source)
         ? readViewed(orderedState.root)
         : {};
-      const restoreCommitView =
-        getReloadMainMode(reloadSelection, orderedState) === 'commit' &&
-        orderedState.source.type === 'working-tree' &&
-        orderedState.files.length > 0;
-      if (restoreCommitView) {
-        setMainMode('commit');
-      }
 
       stateGenerationRef.current += 1;
       stateRef.current = orderedState;
@@ -739,9 +618,7 @@ export default function App({
         return;
       }
 
-      if (loadingPlan) {
-        setPlanLoadError(error instanceof Error ? error.message : String(error));
-      } else {
+      {
         setLoadError(getRepositoryLoadError(error));
       }
     });
@@ -756,7 +633,6 @@ export default function App({
     setCollapsed,
     setExpandedReviewKeys,
     setItemVersionByKey,
-    setMainMode,
 
     setReviewComments,
     setSelectedPath,
@@ -926,15 +802,6 @@ export default function App({
 
   useEffect(() => {
     let canceled = false;
-
-    void window.codiff.getFeatureFlags().then(
-      (flags) => {
-        if (!canceled) {
-          setSharePlanEnabled(flags.planSharing);
-        }
-      },
-      () => {},
-    );
 
     if (!initialConfig) {
       window.codiff.getConfig().then(
@@ -1202,11 +1069,11 @@ export default function App({
   const activatePath = useCallback(
     (path: string) => {
       setPanelVisible('diff', true);
-      setMainMode('review');
+
       setSelectedPath(path);
       scrollPathIntoReview(path, 'smooth');
     },
-    [scrollPathIntoReview, setMainMode, setPanelVisible, setSelectedPath],
+    [scrollPathIntoReview, setPanelVisible, setSelectedPath],
   );
 
   // Refresh the repository state in place after the working tree changed.
@@ -1263,12 +1130,7 @@ export default function App({
             ? current
             : (orderedState.files[0]?.path ?? null),
         );
-        if (
-          mainModeRef.current === 'commit' &&
-          (orderedState.source.type !== 'working-tree' || orderedState.files.length === 0)
-        ) {
-          setMainMode('review');
-        }
+
         setLocalChangesDetected(false);
       })
       .catch(() => {
@@ -1280,11 +1142,11 @@ export default function App({
   }, [
     bumpItemVersion,
     historyLimit,
-    mainModeRef,
+
     pendingSource,
 
     setCollapsed,
-    setMainMode,
+
     setSelectedPath,
   ]);
 
@@ -1304,17 +1166,12 @@ export default function App({
       if (stateRef.current) {
         writeProjectSessions(stateRef.current.root, sourceSessionsRef.current);
       }
-      writeReloadSelection(
-        stateRef.current,
-        selectedPathRef.current,
-        historySourceRef.current,
-        mainModeRef.current,
-      );
+      writeReloadSelection(stateRef.current, selectedPathRef.current, historySourceRef.current);
     };
 
     window.addEventListener('beforeunload', writeCurrentReloadSelection);
     return () => window.removeEventListener('beforeunload', writeCurrentReloadSelection);
-  }, [mainModeRef, saveCurrentSourceSession]);
+  }, [saveCurrentSourceSession]);
 
   const selectSource = useCallback(
     (
@@ -1337,7 +1194,6 @@ export default function App({
       setReloadDeltaPaths(new Set());
       resetDiffSearch();
       setScrollTarget(null);
-      setMainMode('review');
 
       return window.codiff
         .getRepositoryState(source)
@@ -1399,7 +1255,6 @@ export default function App({
       setCollapsed,
       setExpandedReviewKeys,
       setItemVersionByKey,
-      setMainMode,
 
       setReviewComments,
       setSelectedPath,
@@ -1441,7 +1296,7 @@ export default function App({
   const changeSidebarMode = useCallback(
     (panel: 'tree' | 'history') => {
       setPanelVisible(panel === 'tree' ? 'files' : 'history', true);
-      setMainMode('review');
+
       requestAnimationFrame(() => {
         const input = document.querySelector<HTMLInputElement>(
           panel === 'tree' ? '.files-sidebar .sidebar-search' : '.history-sidebar .sidebar-search',
@@ -1450,7 +1305,7 @@ export default function App({
         input?.select();
       });
     },
-    [setMainMode, setPanelVisible],
+    [setPanelVisible],
   );
 
   const commandBarCommands = useAppCommands({
@@ -1509,36 +1364,8 @@ export default function App({
 
   const markInitialContentReady = useInitialWindowReveal(
     configLoaded &&
-      Boolean(
-        loadError ||
-        planLoadError ||
-        (state &&
-          (state.files.length === 0 || visibleFiles.length === 0 || showCommitView || false)),
-      ),
+      Boolean(loadError || (state && (state.files.length === 0 || visibleFiles.length === 0))),
   );
-  if (launchOptions.planFile) {
-    if (planLoadError) {
-      return (
-        <main className="empty-state">
-          <div className="empty-panel squircle">
-            <strong>Could not open plan</strong>
-            <span>{planLoadError}</span>
-          </div>
-        </main>
-      );
-    }
-    return planDocument && configLoaded ? (
-      <Suspense fallback={<main className="loading">Loading…</main>}>
-        <PlanEditorView
-          document={planDocument}
-          onReady={markInitialContentReady}
-          shareEnabled={sharePlanEnabled}
-        />
-      </Suspense>
-    ) : (
-      <main className="loading">Loading…</main>
-    );
-  }
 
   if (loadError) {
     const showFirstRun =
@@ -1576,7 +1403,7 @@ export default function App({
     selectedOrSearchPath && visibleFiles.some((file) => file.path === selectedOrSearchPath)
       ? selectedOrSearchPath
       : (visibleFiles[0]?.path ?? null);
-  const isPullRequest = state.source.type === 'pull-request';
+
   const isSwitchingSource = pendingSource != null;
 
   const repositoryPathParts = splitRepositoryPath(state.root);
@@ -1610,7 +1437,6 @@ export default function App({
   const commonReviewProps = {
     activeSearchMatch: activeDiffSearchMatch,
 
-    codeEditingStore,
     codeQualityFindings: state.codeQualityFindings,
     collapsed,
     comments: visibleReviewComments,
@@ -1640,10 +1466,9 @@ export default function App({
     },
     onOpenFile: openFile,
     onReady: markInitialContentReady,
-    onRefreshMarkdown: refreshMarkdownFile,
-    onSaveCommentEdit: updateComment,
+
     onSelectPathFromScroll: updateSelectedPathFromScroll,
-    onSubmitComment: submitPullRequestComment,
+
     onToggleCollapsed: toggleCollapsed,
     onToggleViewed: toggleViewed,
     onUpdateComment: updateComment,
@@ -1651,19 +1476,7 @@ export default function App({
     searchQuery: diffSearchQuery,
     showWhitespace,
     source: state.source,
-    sourceDescriptionActions: isPullRequest ? (
-      <PullRequestReviewButtons
-        disabled={pullRequestReviewSubmitting != null}
-        hasPendingComments={hasPendingReviewComments}
-        onSubmitReview={submitPullRequestReview}
-        reviewStatus={state.source.type === 'pull-request' ? state.source.reviewStatus : undefined}
-        showCommentReview={
-          state.source.type === 'pull-request' &&
-          (state.source.provider === 'github' || state.source.host === 'github.com')
-        }
-      />
-    ) : undefined,
-    supportsReviewCommentActions: isPullRequest,
+
     theme: preferences.theme,
     viewed,
     wordWrap,
@@ -1795,8 +1608,7 @@ export default function App({
                       }
                     : null
               }
-              commitFiles={state.files}
-              commitViewOpen={showCommitView}
+
               currentSource={pendingSource ?? state.source}
               files={visibleFiles}
               hidden={!visiblePanels[mode === 'history' ? 'history' : 'files']}
@@ -1811,10 +1623,6 @@ export default function App({
               onSearchQueryChange={mode === 'history' ? setHistorySearchQuery : setFileSearchQuery}
               onSelectSource={selectSource}
 
-              onToggleCommitView={() => {
-                setPanelVisible('diff', true);
-                (showCommitView ? closeCommitView : openCommitView)();
-              }}
               pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
               reloadDeltaPaths={reloadDeltaPaths}
               searchQuery={mode === 'history' ? historySearchQuery : fileSearchQuery}
@@ -1840,14 +1648,6 @@ export default function App({
       <main className="review" hidden={!visiblePanels.diff} id="review-panel-diff">
         {isSwitchingSource ? (
           <ReviewSourceLoading />
-        ) : showCommitView ? (
-          <CommitView
-            branch={state.branch}
-            draft={commitDraft}
-            model={commitModel}
-            onCommit={commitChanges}
-            onCommitOutput={subscribeToCommitOutput}
-          />
         ) : state.files.length === 0 ? (
           <div className="empty-state">
             <div className="empty-panel squircle">

@@ -163,17 +163,6 @@ const getResolvedSourceKey = (source) => {
 
 /** @param {string} repositoryPath @param {Partial<CodiffLaunchOptions>} [launchOptions] */
 const getWindowIdentity = (repositoryPath, launchOptions = {}) => {
-  if (launchOptions.planFile) {
-    const planPath = getRealPath(launchOptions.planFile);
-    const resultPath = launchOptions.planResultFile
-      ? getRealPath(launchOptions.planResultFile)
-      : 'standalone';
-    return {
-      key: `plan:${planPath}\0${resultPath}`,
-      repositoryRoot: getRealPath(dirname(planPath)),
-      sourceKey: `plan:${planPath}`,
-    };
-  }
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   const sourceKey = getSourceKey(repositoryRoot, launchOptions.source);
   return sourceKey

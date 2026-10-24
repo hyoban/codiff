@@ -46,24 +46,3 @@ export const writeProjectSessions = (
     ),
   );
 };
-
-export type SavedCommitDraft = { body: string; excluded: Array<string>; subject: string };
-const draftKey = (root: string) => `codiff:project-commit-draft:${root}`;
-export const readProjectCommitDraft = (root: string): SavedCommitDraft | null => {
-  try {
-    const draft = JSON.parse(
-      sessionStorage.getItem(draftKey(root)) ?? 'null',
-    ) as SavedCommitDraft | null;
-    return draft &&
-      typeof draft.subject === 'string' &&
-      typeof draft.body === 'string' &&
-      Array.isArray(draft.excluded)
-      ? draft
-      : null;
-  } catch {
-    return null;
-  }
-};
-export const writeProjectCommitDraft = (root: string, draft: SavedCommitDraft) => {
-  sessionStorage.setItem(draftKey(root), JSON.stringify(draft));
-};
