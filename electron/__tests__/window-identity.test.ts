@@ -32,8 +32,7 @@ const { findMatchingWindowIdentity, getWindowIdentity, getWindowIdentityForRepos
               type: 'pull-request';
               url: string;
             };
-        walkthrough?: boolean;
-        walkthroughFile?: string;
+
         planFile?: string;
         planResultFile?: string;
       },
@@ -157,27 +156,6 @@ test(
     expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
   },
 );
-
-test('implicit walkthrough identities use HEAD only when the working tree is clean', async () => {
-  await using directory = await createTemporaryDirectory('codiff-window-identity-');
-  await initRepository(directory.path);
-
-  const headIdentity = getWindowIdentity(directory.path, {
-    source: { ref: 'HEAD', type: 'commit' },
-  });
-  expect(getWindowIdentity(directory.path, { walkthrough: true })?.key).toBe(headIdentity?.key);
-
-  await writeFile(join(directory.path, 'local.txt'), 'change\n');
-  expect(getWindowIdentity(directory.path, { walkthrough: true })?.sourceKey).toBe('working-tree');
-
-  await rm(join(directory.path, 'local.txt'));
-  expect(
-    getWindowIdentity(directory.path, {
-      walkthrough: true,
-      walkthroughFile: '/tmp/walkthrough.json',
-    })?.sourceKey,
-  ).toBe('working-tree');
-});
 
 test('window identities distinguish branch history launches', async () => {
   await using directory = await createTemporaryDirectory('codiff-window-identity-');

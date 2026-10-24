@@ -9,12 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import packageJson from '../package.json' with { type: 'json' };
-import {
-  formatHelpText,
-  getReviewSource,
-  parseArguments,
-  resolvePullRequestTargetUrl,
-} from './arguments.js';
+import { formatHelpText, parseArguments, resolvePullRequestTargetUrl } from './arguments.js';
 import { completionShells, generateCompletionScript } from './completions.js';
 import { waitForPlanResult } from './plan-result.js';
 import { runUpdateCommand } from './update-command.js';
@@ -92,16 +87,6 @@ const openExternal = (url) =>
     });
   });
 
-// Assemble the narrative walkthrough authoring guide: the prose, then the live
-// schema object serialized inline (single-sourced from the validator — no copy).
-const buildWalkthroughGuide = () => {
-  const { narrativeWalkthroughSchema } = require(
-    resolve(root, 'electron/narrative-walkthrough.cjs'),
-  );
-  const guide = readFileSync(resolve(root, 'bin/walkthrough-guide.md'), 'utf8').trimEnd();
-  return `${guide}\n\n\`\`\`json\n${JSON.stringify(narrativeWalkthroughSchema, null, 2)}\n\`\`\`\n`;
-};
-
 const runCodiffUpdate = () => {
   const appBundleMatch = process.platform === 'darwin' ? root.match(/^(.*\.app)\//) : null;
   return runUpdateCommand({
@@ -162,19 +147,11 @@ const run = async () => {
     return;
   }
 
-  if (parsedArguments.walkthroughGuide) {
-    process.stdout.write(buildWalkthroughGuide());
-    return;
-  }
-
   const {
-    agentBackend,
     branchRef,
-    claudeSessionId,
-    codexSessionId,
+
     commitRef,
-    opencodeSessionId,
-    piSessionId,
+
     planFilePath,
     public: forcePublic,
     pullRequestBranch,
@@ -183,9 +160,6 @@ const run = async () => {
     range,
     requestedPath,
     share,
-    walkthrough,
-    walkthroughContextPath,
-    walkthroughFilePath,
   } = parsedArguments;
   let { pullRequestUrl } = parsedArguments;
 
@@ -212,24 +186,15 @@ const run = async () => {
   if (share) {
     if (planFilePath) {
       const { sharePlanFile } = require('../electron/headless-plan-share.cjs');
-      const sessionId =
-        agentBackend === 'claude'
-          ? claudeSessionId
-          : agentBackend === 'opencode'
-            ? opencodeSessionId
-            : agentBackend === 'pi'
-              ? piSessionId
-              : codexSessionId;
+
       try {
         const url = await sharePlanFile({
-          agent: agentBackend ?? undefined,
           codiffVersion: packageJson.version,
           forcePublic,
           openExternal,
           planFile: planFilePath,
           repositoryPath: requestedPath,
           serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
-          sessionId: sessionId ?? undefined,
         });
         process.stdout.write(`${url}\n`);
       } catch (error) {
@@ -239,48 +204,9 @@ const run = async () => {
       return;
     }
 
-    const source = getReviewSource({
-      branchRef,
-      commitRef,
-      pullRequestProvider,
-      pullRequestUrl,
-      range,
-    });
-    const {
-      generateAndShareWalkthrough,
-      shareWalkthroughFile,
-    } = require('../electron/headless-walkthrough-share.cjs');
-
-    try {
-      const commonOptions = {
-        agent: agentBackend ?? undefined,
-        codiffVersion: packageJson.version,
-        forcePublic,
-        openExternal,
-        repositoryPath: requestedPath,
-        serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
-        source,
-      };
-      const url = walkthroughFilePath
-        ? await shareWalkthroughFile({
-            ...commonOptions,
-            walkthroughFile: walkthroughFilePath,
-          })
-        : await generateAndShareWalkthrough({
-            ...commonOptions,
-            claudeSessionId,
-            codexSessionId,
-            opencodeSessionId,
-            piSessionId,
-            walkthroughContextPath,
-          });
-      process.stdout.write(`${url}\n`);
-      return;
-    } catch (error) {
-      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      process.exitCode = 1;
-      return;
-    }
+    process.stderr.write('codiff: --share requires --plan.\n');
+    process.exitCode = 1;
+    return;
   }
 
   // Prefer an explicit ELECTRON_RENDERER_URL; otherwise auto-use Codiff's dev
@@ -299,22 +225,18 @@ const run = async () => {
   const planResultPath = planResultDirectory ? join(planResultDirectory, 'result.json') : '';
   const childEnv = {
     ...process.env,
-    CODIFF_AGENT_BACKEND: agentBackend ?? '',
+
     CODIFF_BRANCH_REF: branchRef ?? '',
-    CODIFF_CLAUDE_SESSION_ID: claudeSessionId ?? '',
+
     CODIFF_COMMIT_REF: commitRef ?? '',
-    CODIFF_CODEX_SESSION_ID: codexSessionId ?? '',
-    CODIFF_OPENCODE_SESSION_ID: opencodeSessionId ?? '',
-    CODIFF_PI_SESSION_ID: piSessionId ?? '',
+
     CODIFF_PLAN_FILE: planFilePath ?? '',
     CODIFF_PLAN_RESULT_FILE: planResultPath,
     CODIFF_PULL_REQUEST_URL: pullRequestUrl ?? '',
     CODIFF_REVIEW_PROVIDER: pullRequestProvider ?? '',
     CODIFF_RANGE: range ? `${range.base}${range.symmetric ? '...' : '..'}${range.head}` : '',
     CODIFF_REPOSITORY_PATH: requestedPath,
-    CODIFF_WALKTHROUGH: walkthrough ? '1' : '',
-    CODIFF_WALKTHROUGH_CONTEXT: walkthroughContextPath ?? '',
-    CODIFF_WALKTHROUGH_FILE: walkthroughFilePath ?? '',
+
     ELECTRON_RENDERER_URL: rendererURL,
   };
 

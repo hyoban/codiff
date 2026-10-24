@@ -1,6 +1,4 @@
 import { auth } from 'void/client/react';
-import darkPreview from './assets/codiff-dark.webp';
-import lightPreview from './assets/codiff-light.webp';
 import icon from './assets/icon.webp';
 import SignInButton from './SignInButton.tsx';
 
@@ -10,16 +8,16 @@ const cliCommands = [
     description: 'Open the current Git repository in Codiff.',
   },
   {
-    command: 'codiff -w',
-    description: 'Generate a walkthrough and open it in Codiff.',
+    command: 'codiff main',
+    description: 'Review the current branch against main.',
   },
   {
     command: 'codiff pr 75',
     description: 'Open GitHub pull request 75 using the current repository.',
   },
   {
-    command: 'codiff --share pr 232',
-    description: 'Generate a walkthrough for pull request 232 and print its share URL.',
+    command: 'codiff --plan plan.md --share',
+    description: 'Share a Markdown plan.',
   },
 ];
 
@@ -41,18 +39,6 @@ export default function HomeGuide() {
             ) : null}
           </div>
         </section>
-        <aside aria-label="Codiff preview" className="codiff-web-guide-preview">
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcSet={darkPreview} />
-            <img
-              alt="A Codiff walkthrough reviewing code changes"
-              draggable={false}
-              height={1052}
-              src={lightPreview}
-              width={1600}
-            />
-          </picture>
-        </aside>
       </div>
 
       <section className="codiff-web-guide-section">
@@ -68,14 +54,10 @@ export default function HomeGuide() {
       <section className="codiff-web-guide-section">
         <div className="codiff-web-step">2</div>
         <div className="codiff-web-guide-content">
-          <h2>Install the terminal helper and agent skill</h2>
+          <h2>Install the terminal helper</h2>
           <p>
             Open Codiff and choose <code>Codiff &gt; Install Terminal Helper</code> to make the{' '}
             <code>codiff</code> command available in your shell.
-          </p>
-          <p>
-            Then choose <code>Codiff &gt; Install Skill</code> and select Codex, Claude Code, Pi, or
-            OpenCode.
           </p>
         </div>
       </section>
@@ -83,20 +65,10 @@ export default function HomeGuide() {
       <section className="codiff-web-guide-section">
         <div className="codiff-web-step">3</div>
         <div className="codiff-web-guide-content">
-          <h2>Use Codiff from your agent</h2>
+          <h2>Review your changes</h2>
           <p>
-            Run <code>$codiff</code> to generate a local walkthrough within your agent session and
-            open it in Codiff.
-          </p>
-          <p>
-            Run <code>$codiff plan</code> to open an implementation plan in Codiff for review and
-            editing before your agent starts executing it.
-          </p>
-          <p>
-            Run <code>$codiff share</code> to generate an immutable shared walkthrough on{' '}
-            <a href="https://codiff.dev">codiff.dev</a>. For example, run it as-is to share the
-            current changes, or run <code>$codiff share pr 131</code> to share a walkthrough of pull
-            request 131.
+            Run <code>codiff</code> from your repository to review changes, add comments, and commit
+            selected files.
           </p>
         </div>
       </section>

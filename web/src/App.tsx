@@ -8,7 +8,6 @@ import HomeGuide from './HomeGuide.tsx';
 const ConnectPage = lazy(() => import('./sharing/ConnectPage.tsx'));
 const PlanPage = lazy(() => import('./sharing/PlanPage.tsx'));
 const StatsPage = lazy(() => import('./sharing/StatsPage.tsx'));
-const WalkthroughPage = lazy(() => import('./sharing/WalkthroughPage.tsx'));
 
 const PageThinking = () => (
   <div className="codiff-web-page-thinking">
@@ -136,7 +135,6 @@ export default function App() {
   const router = useRouter();
   const connect = /^\/connect\/([^/]+)\/?$/.exec(router.path);
   const plan = /^\/p\/([^/]+)\/?$/.exec(router.path);
-  const walkthrough = /^\/w\/([^/]+)\/?$/.exec(router.path);
 
   if (plan) {
     return (
@@ -145,13 +143,7 @@ export default function App() {
       </Suspense>
     );
   }
-  if (walkthrough) {
-    return (
-      <Suspense fallback={<PageThinking />}>
-        <WalkthroughPage slug={decodeURIComponent(walkthrough[1])} />
-      </Suspense>
-    );
-  }
+
   if (connect) {
     return (
       <Suspense fallback={<PageThinking />}>

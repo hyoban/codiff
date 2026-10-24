@@ -1,8 +1,6 @@
 {
   "settings": {
-    "agentBackend": "codex",
     "checkForUpdates": true,
-    "claudeModel": "sonnet",
     "codeFontFamily": "",
     "codeFontSize": 13,
     "copyCommentsOnClose": false,
@@ -10,21 +8,15 @@
     "editorCommand": "",
     "expandUnchanged": false,
     "lastRepositoryPath": "",
-    "openAIModel": "gpt-5.6-terra",
-    "openAIReasoningEffort": "",
-    "opencodeModel": "opencode-default",
-    "piModel": "pi-default",
     "renderMarkdownAs": "preview",
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",
     "showOutdated": false,
     "showWhitespace": false,
     "theme": "system",
-    "walkthroughPrompt": "",
     "wordWrap": false
   },
   "keymap": {
-    "askAgent": "Mod+Alt+Enter",
     "closeSearch": "Escape",
     "commandBar": "Mod+k",
     "diffSearch": "Mod+f",

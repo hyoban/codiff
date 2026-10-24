@@ -3,7 +3,7 @@
 const { spawn } = require('node:child_process');
 const { homedir } = require('node:os');
 const { join } = require('node:path');
-const { findExecutableOnPath, isExecutableFile } = require('./agent-shared.cjs');
+const { findExecutableOnPath, isExecutableFile } = require('./command-utils.cjs');
 
 const CLOUDFLARED_NOT_FOUND_CODE = 'CLOUDFLARED_NOT_FOUND';
 const CLOUDFLARED_NOT_FOUND_MESSAGE =

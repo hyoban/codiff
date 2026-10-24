@@ -46,11 +46,7 @@ import {
   type ReactNode,
   type SyntheticEvent,
 } from 'react';
-import claudeIconUrl from '../../assets/claude.svg';
-import codexIconUrl from '../../assets/codex.svg';
-import opencodeIconUrl from '../../assets/opencode.svg';
-import piIconUrl from '../../assets/pi.svg';
-import { getShortcutLabel, matchesShortcut } from '../../config/keymap.ts';
+import { matchesShortcut } from '../../config/keymap.ts';
 import type { CodiffDiffStyle, CodiffKeymap } from '../../config/types.ts';
 import type {
   CodeViewInstance,
@@ -63,7 +59,6 @@ import type {
   ReviewIdentity,
   ReviewScrollBehavior,
   ReviewScrollTarget,
-  WalkthroughNote,
 } from '../../lib/app-types.ts';
 import {
   codeViewItemMetrics,
@@ -77,6 +72,7 @@ import {
   sectionLabel,
   workerHighlighterOptions,
 } from '../../lib/code-view-options.ts';
+import { isGeneratedReviewFile } from '../../lib/diff-hunks.js';
 import {
   canRenderImagePreview,
   getDiffLineCountFromVisibleSections,
@@ -97,7 +93,6 @@ import {
 import { getItemVersion } from '../../lib/item-version.ts';
 import { isNativeInputTarget, isPrimaryModifier } from '../../lib/keyboard.ts';
 import { sanitizeMarkdownImages } from '../../lib/markdown.tsx';
-import { isGeneratedWalkthroughFile } from '../../lib/narrative-walkthrough-diff.js';
 import {
   getCommentKey,
   getReviewCommentLineLabel,
@@ -286,10 +281,10 @@ function CodeViewHeader({
     isSelected,
     isViewed,
     lineCount,
+    note,
     reviewIdentity,
     section,
     sectionCount,
-    walkthroughNote,
   } = meta;
   const canOpenFile = file.status !== 'deleted';
   const canLoadSection = shouldLoadDiffSectionContents(section);
@@ -297,7 +292,7 @@ function CodeViewHeader({
 
   return (
     <div
-      className={`codiff-file-header${walkthroughNote ? ' with-note' : ''}${
+      className={`codiff-file-header${note ? ' with-note' : ''}${
         isCollapsed ? ' collapsed' : ''
       }${isSelected ? ' selected' : ''}${isViewed ? ' viewed' : ''}`}
     >
@@ -355,9 +350,7 @@ function CodeViewHeader({
             ) : null}
           </span>
           {file.oldPath ? <span className="codiff-file-old-path">{file.oldPath}</span> : null}
-          {walkthroughNote ? (
-            <span className="codiff-file-note">{walkthroughNote.reason}</span>
-          ) : null}
+          {note ? <span className="codiff-file-note">{note}</span> : null}
         </span>
       </div>
       <div className="codiff-file-details">
@@ -367,7 +360,7 @@ function CodeViewHeader({
             {sectionLabel[section.kind]}
           </span>
         ) : null}
-        {isGeneratedWalkthroughFile(file) ? (
+        {isGeneratedReviewFile(file) ? (
           <span className="codiff-generated-badge" title="Generated file">
             Generated
           </span>
@@ -445,30 +438,6 @@ function IdentityReviewAvatar({ identity }: { identity: GitIdentity | null }) {
     />
   );
 }
-
-function AgentAvatar({ agentId }: { agentId: 'codex' | 'claude' | 'opencode' | 'pi' }) {
-  return (
-    <img
-      alt=""
-      className="review-comment-avatar-codex"
-      draggable={false}
-      src={agentIconUrl(agentId)}
-    />
-  );
-}
-
-const agentIconUrl = (agentId: 'codex' | 'claude' | 'opencode' | 'pi') => {
-  return agentId === 'pi'
-    ? piIconUrl
-    : agentId === 'opencode'
-      ? opencodeIconUrl
-      : agentId === 'claude'
-        ? claudeIconUrl
-        : codexIconUrl;
-};
-
-const canAskCodexForComment = (comment: ReviewComment) =>
-  !comment.isReadOnly && comment.body.trim().length > 0 && comment.codexReply?.status !== 'loading';
 
 const canSubmitComment = (comment: ReviewComment) =>
   !comment.isReadOnly &&
@@ -1360,15 +1329,13 @@ function ImageDiffPreview({
 }
 
 function ReviewCommentEditor({
-  agentId,
-  agentLabel,
   comment,
   displayName,
   focusCommentId,
   focusEditorRef,
   identity,
   keymap,
-  onAskCodex,
+
   onCommentBlur,
   onCommentDraftChange,
   onCommentFocus,
@@ -1378,15 +1345,13 @@ function ReviewCommentEditor({
   onUpdateComment,
   supportsReviewCommentActions,
 }: {
-  agentId: 'codex' | 'claude' | 'opencode' | 'pi';
-  agentLabel: string;
   comment: ReviewComment;
   displayName: string;
   focusCommentId: string | null;
   focusEditorRef: (node: MarkdownEditorHandle | null) => void;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -1449,7 +1414,7 @@ function ReviewCommentEditor({
     editEditorReadyState.commentId === comment.id && editEditorReadyState.ready;
 
   const draftComment = withCommentBody(comment, draft);
-  const canAskCodex = onAskCodex != null && canAskCodexForComment(draftComment);
+
   const commentCanSubmit = canSubmitComment(draftComment);
   const canEditExistingComment =
     supportsReviewCommentActions && comment.isReadOnly && comment.canEdit === true;
@@ -1521,13 +1486,6 @@ function ReviewCommentEditor({
     },
     [comment.body, comment.id, onCommentDraftChange],
   );
-
-  const handleAskCodex = useCallback(() => {
-    const flushed = flushDraft();
-    if (onAskCodex && canAskCodexForComment(flushed)) {
-      onAskCodex(comment.id);
-    }
-  }, [comment.id, flushDraft, onAskCodex]);
 
   const handleSubmitComment = useCallback(() => {
     const flushed = flushDraft();
@@ -1662,15 +1620,6 @@ function ReviewCommentEditor({
         return;
       }
 
-      if (matchesShortcut(event, keymap, 'askAgent')) {
-        if (canAskCodex) {
-          event.preventDefault();
-          event.stopPropagation();
-          handleAskCodex();
-        }
-        return;
-      }
-
       if (!matchesShortcut(event, keymap, 'discardComment')) {
         return;
       }
@@ -1687,13 +1636,12 @@ function ReviewCommentEditor({
       }
     },
     [
-      canAskCodex,
       commentCanSubmit,
       comment.id,
       comment.isReadOnly,
       draft,
       handleAddComment,
-      handleAskCodex,
+
       handleSubmitComment,
       keymap,
       onDeleteComment,
@@ -1761,28 +1709,7 @@ function ReviewCommentEditor({
                 <X aria-hidden className="review-comment-delete-icon" size={14} weight="bold" />
               </button>
             ) : null}
-            {!comment.isReadOnly && onAskCodex ? (
-              <button
-                className="review-comment-action"
-                disabled={!canAskCodex}
-                onClick={handleAskCodex}
-                title={
-                  canAskCodex
-                    ? `Ask ${agentLabel} (${getShortcutLabel(keymap, 'askAgent')})`
-                    : `Write a note before asking ${agentLabel}`
-                }
-                type="button"
-              >
-                <img
-                  alt=""
-                  aria-hidden
-                  className="review-comment-action-icon"
-                  draggable={false}
-                  src={agentIconUrl(agentId)}
-                />
-                Ask
-              </button>
-            ) : null}
+
             {supportsReviewCommentActions && !comment.isReadOnly ? (
               <button
                 className="review-comment-action"
@@ -1901,33 +1828,6 @@ function ReviewCommentEditor({
           ) : null}
         </div>
       </div>
-      {comment.codexReply ? (
-        <div className="review-comment codex">
-          <AgentAvatar agentId={agentId} />
-          <div className="review-comment-body codex">
-            <div className="review-comment-header codex">
-              <strong>{agentLabel}</strong>
-            </div>
-            <div
-              className={`review-comment-codex-reply${
-                comment.codexReply.status === 'loading' ? ' is-loading' : ''
-              }${comment.codexReply.status === 'error' ? ' error' : ''}`}
-            >
-              {comment.codexReply.status === 'loading' ? (
-                <span className="review-comment-codex-loading">Waiting for {agentLabel}…</span>
-              ) : (
-                <ReadOnlyMarkdown
-                  ariaLabel={`${agentLabel} reply`}
-                  className="review-comment-codex-reply-markdown"
-                  density="compact"
-                  value={comment.codexReply.body ?? comment.codexReply.error ?? ''}
-                  variant="embedded"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </Fragment>
   );
 }
@@ -1961,15 +1861,13 @@ const noopResolveThread = () => {};
 const noopLayoutReady = () => {};
 
 function ReviewCommentThreadGroup({
-  agentId,
-  agentLabel,
   comments,
   focusCommentId,
   focusCommentRequest,
   focusEditorRef,
   identity,
   keymap,
-  onAskCodex,
+
   onCommentBlur,
   onCommentDraftChange,
   onCommentFocus,
@@ -1981,15 +1879,13 @@ function ReviewCommentThreadGroup({
   onUpdateComment,
   supportsReviewCommentActions,
 }: {
-  agentId: 'codex' | 'claude' | 'opencode' | 'pi';
-  agentLabel: string;
   comments: ReadonlyArray<ReviewComment>;
   focusCommentId: string | null;
   focusCommentRequest: number;
   focusEditorRef: (node: MarkdownEditorHandle | null) => void;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -2068,8 +1964,6 @@ function ReviewCommentThreadGroup({
 
         return (
           <ReviewCommentEditor
-            agentId={agentId}
-            agentLabel={agentLabel}
             comment={comment}
             displayName={displayName}
             focusCommentId={focusCommentId}
@@ -2077,7 +1971,7 @@ function ReviewCommentThreadGroup({
             identity={identity}
             key={comment.id}
             keymap={keymap}
-            onAskCodex={onAskCodex}
+
             onCommentBlur={onCommentBlur}
             onCommentDraftChange={onCommentDraftChange}
             onCommentFocus={onCommentFocus}
@@ -2132,15 +2026,13 @@ function ReviewCommentThreadGroup({
 }
 
 function ReviewAnnotation({
-  agentId,
-  agentLabel,
   annotation,
   comments,
   focusCommentId,
   focusCommentRequest,
   identity,
   keymap,
-  onAskCodex,
+
   onCommentBlur,
   onCommentDraftChange,
   onCommentFocus,
@@ -2153,15 +2045,13 @@ function ReviewAnnotation({
   onUpdateComment,
   supportsReviewCommentActions,
 }: {
-  agentId: 'codex' | 'claude' | 'opencode' | 'pi';
-  agentLabel: string;
   annotation: DiffLineAnnotation<ReviewCommentAnnotationMetadata>;
   comments: ReadonlyArray<ReviewComment>;
   focusCommentId: string | null;
   focusCommentRequest: number;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -2219,8 +2109,6 @@ function ReviewAnnotation({
     <div className="review-comment-thread" ref={threadRef}>
       {commentGroups.map((group) => (
         <ReviewCommentThreadGroup
-          agentId={agentId}
-          agentLabel={agentLabel}
           comments={group.comments}
           focusCommentId={focusCommentId}
           focusCommentRequest={focusCommentRequest}
@@ -2228,7 +2116,7 @@ function ReviewAnnotation({
           identity={identity}
           key={group.key}
           keymap={keymap}
-          onAskCodex={onAskCodex}
+
           onCommentBlur={onCommentBlur}
           onCommentDraftChange={onCommentDraftChange}
           onCommentFocus={onCommentFocus}
@@ -2344,21 +2232,6 @@ const getBlockItemId = (block: FileReviewDiffBlock, section: DiffSection) =>
   block.itemIdPrefix ? `${block.itemIdPrefix}:${getItemId(section)}` : getItemId(section);
 
 const getBlockHeaderItemId = (block: ReviewDiffBlock) => `${block.id}:walkthrough-header`;
-
-const createInlineWalkthroughNote = (reason: string): WalkthroughNote => ({
-  action: 'review',
-  context: reason,
-  groupReason: 'Walkthrough',
-  groupTitle: 'Walkthrough',
-  impact: 'contained',
-  order: 0,
-  reason,
-});
-
-const getBlockWalkthroughNote = (
-  block: FileReviewDiffBlock,
-  fallbackByPath: ReadonlyMap<string, WalkthroughNote>,
-) => (block.note ? createInlineWalkthroughNote(block.note) : fallbackByPath.get(block.file.path));
 
 const lineIsVisibleInFileDiff = (
   fileDiff: FileDiffMetadata,
@@ -2580,8 +2453,7 @@ const isSameSelection = (a: SelectedLineRange, b: SelectedLineRange) =>
 
 export function ReviewCodeView({
   activeSearchMatch,
-  agentId,
-  agentLabel,
+
   allowViewedToggle = false,
   blocks,
   bottomInset = codeViewLayout.paddingBottom,
@@ -2607,7 +2479,7 @@ export function ReviewCodeView({
   keymap,
   loadingSectionIds,
   onActiveBlockChange,
-  onAskCodex,
+
   onCommentDraftChange,
   onCreateComment,
   onDeleteComment,
@@ -2642,12 +2514,10 @@ export function ReviewCodeView({
   supportsReviewCommentActions,
   theme = 'system',
   viewed,
-  walkthroughNotes,
   wordWrap,
 }: {
   activeSearchMatch: DiffSearchMatch | null;
-  agentId: 'codex' | 'claude' | 'opencode' | 'pi';
-  agentLabel: string;
+
   allowViewedToggle?: boolean;
   blocks?: ReadonlyArray<ReviewDiffBlock>;
   bottomInset?: number;
@@ -2673,7 +2543,7 @@ export function ReviewCodeView({
   keymap: CodiffKeymap;
   loadingSectionIds: ReadonlySet<string>;
   onActiveBlockChange?: (blockId: string) => void;
-  onAskCodex?: (commentId: string) => void;
+
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCreateComment: (comment: Omit<ReviewComment, 'body' | 'id'>) => void;
   onDeleteComment: (commentId: string) => void;
@@ -2708,7 +2578,6 @@ export function ReviewCodeView({
   supportsReviewCommentActions: boolean;
   theme?: CodiffPreferences['theme'];
   viewed: Record<string, string>;
-  walkthroughNotes: ReadonlyMap<string, WalkthroughNote>;
   wordWrap: boolean;
 }) {
   const codeViewRef = useRef<CodeViewHandle<ReviewAnnotationMetadata, undefined>>(null);
@@ -2962,11 +2831,11 @@ export function ReviewCodeView({
       const isCollapsed =
         !forceExpandedPaths.has(file.path) &&
         !expandedReviewKeys.has(reviewKey) &&
-        (isViewed || collapsed.has(reviewKey) || isGeneratedWalkthroughFile(file));
+        (isViewed || collapsed.has(reviewKey) || isGeneratedReviewFile(file));
       const visibleSections = getVisibleDiffSections(file, showWhitespace);
       const lineCount = getDiffLineCountFromVisibleSections(visibleSections);
       const sections = isCollapsed ? visibleSections.slice(0, 1) : visibleSections;
-      const walkthroughNote = getBlockWalkthroughNote(block, walkthroughNotes);
+      const note = block.note;
       const blockCommentsBySection = groupReviewCommentsBySection(block.comments ?? []);
 
       for (const [index, { fileDiff, section }] of sections.entries()) {
@@ -2993,7 +2862,7 @@ export function ReviewCodeView({
         }:${reviewKey}:${section.id}:${commentLayoutPassByItem[id] ?? 0}`;
         const sectionStateVersionKey = `${isCollapsed ? 'collapsed' : 'open'}:${
           isViewed ? 'viewed' : 'pending'
-        }:${index}:${fontLayoutKey}:${walkthroughNote?.reason ?? ''}`;
+        }:${index}:${fontLayoutKey}:${note ?? ''}`;
         const annotationMap = new Map<string, DiffLineAnnotation<ReviewAnnotationMetadata>>();
         const globalSectionComments = commentsBySection.get(section.id) ?? [];
         const visibleGlobalComments = globalSectionComments.filter(
@@ -3078,10 +2947,10 @@ export function ReviewCodeView({
           isSelected,
           isViewed,
           lineCount,
+          note,
           reviewIdentity,
           section,
           sectionCount: file.sections.length,
-          walkthroughNote,
         });
         nextFirstItemByBlockId.set(block.id, nextFirstItemByBlockId.get(block.id) ?? id);
         nextFirstItemByPath.set(file.path, nextFirstItemByPath.get(file.path) ?? id);
@@ -3209,7 +3078,6 @@ export function ReviewCodeView({
     source.type,
     viewed,
     reviewIdentityByPath,
-    walkthroughNotes,
   ]);
 
   const codeViewItems = useMemo<ReadonlyArray<CodeViewItem<ReviewAnnotationMetadata>>>(() => {
@@ -4874,15 +4742,13 @@ export function ReviewCodeView({
 
       return (
         <ReviewAnnotation
-          agentId={agentId}
-          agentLabel={agentLabel}
           annotation={annotation as DiffLineAnnotation<ReviewCommentAnnotationMetadata>}
           comments={renderComments}
           focusCommentId={focusCommentId}
           focusCommentRequest={focusCommentRequest}
           identity={gitIdentity}
           keymap={keymap}
-          onAskCodex={onAskCodex}
+
           onCommentBlur={blurComment}
           onCommentDraftChange={onCommentDraftChange}
           onCommentFocus={focusComment}
@@ -4898,8 +4764,6 @@ export function ReviewCodeView({
       );
     },
     [
-      agentId,
-      agentLabel,
       blurComment,
       deleteComment,
       focusCommentId,
@@ -4912,7 +4776,7 @@ export function ReviewCodeView({
       markdownPreviewHeights,
       markImagePreviewLayoutReady,
       markCommentLayoutChanged,
-      onAskCodex,
+
       onCommentDraftChange,
       onLoadImageContent,
       onResolveThread,

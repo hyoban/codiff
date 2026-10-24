@@ -19,7 +19,7 @@ const { getCommandLineLaunchOptions, getCommandLineRepositoryPath, getInitialRep
       fallbackPath?: string,
     ) => {
       applyUpdate?: boolean;
-      codexSessionId?: string;
+
       planFile?: string;
       planResultFile?: string;
       repositoryPathProvided: boolean;
@@ -28,14 +28,11 @@ const { getCommandLineLaunchOptions, getCommandLineRepositoryPath, getInitialRep
         | { ref: string; type: 'commit' }
         | { base: string; head: string; symmetric: boolean; type: 'range' }
         | { type: 'pull-request'; url: string };
-      walkthrough: boolean;
-      walkthroughContext?: unknown;
     };
     getCommandLineRepositoryPath: (commandLine: ReadonlyArray<string>) => string | null;
     getInitialRepositoryPath: (
       launchPath: string,
       launchOptions: {
-        codexSessionId?: string;
         planFile?: string;
         planResultFile?: string;
         repositoryPathProvided: boolean;
@@ -44,8 +41,6 @@ const { getCommandLineLaunchOptions, getCommandLineRepositoryPath, getInitialRep
           | { ref: string; type: 'commit' }
           | { base: string; head: string; symmetric: boolean; type: 'range' }
           | { type: 'pull-request'; url: string };
-        walkthrough: boolean;
-        walkthroughContext?: unknown;
       },
       lastRepositoryPath: string,
       environment?: NodeJS.ProcessEnv,
@@ -69,31 +64,11 @@ const git = async (repo: string, args: ReadonlyArray<string>) => {
 
 const defaultLaunchOptions = {
   repositoryPathProvided: false,
-  walkthrough: false,
 };
 
 test('parses the apply-update launch flag', () => {
   expect(getCommandLineLaunchOptions(['codiff', '--apply-update']).applyUpdate).toBe(true);
   expect(getCommandLineLaunchOptions(['codiff', '/repo']).applyUpdate).toBeUndefined();
-});
-
-test('parses the OpenCode agent override', () => {
-  expect(
-    readCommandLine([
-      'codiff',
-      '--agent',
-      'opencode',
-      '--opencode-session',
-      'ses_121b4816bffebMr9YE52O4870p',
-      '/repo',
-    ]),
-  ).toMatchObject({
-    launchOptions: {
-      agentBackend: 'opencode',
-      opencodeSessionId: 'ses_121b4816bffebMr9YE52O4870p',
-      repositoryPathProvided: true,
-    },
-  });
 });
 
 test('plan command lines do not inspect Git refs', { concurrent: false }, async () => {
@@ -120,21 +95,6 @@ test('plan command lines do not inspect Git refs', { concurrent: false }, async 
   expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
 });
 
-test('parses commit and walkthrough command-line options', () => {
-  expect(readCommandLine(['codiff', '--walkthrough', '--commit', 'HEAD', '/repo'])).toEqual({
-    launchOptions: {
-      repositoryPathProvided: true,
-      source: {
-        ref: 'HEAD',
-        type: 'commit',
-      },
-      walkthrough: true,
-    },
-    pullRequestNumber: null,
-    repositoryPath: '/repo',
-  });
-});
-
 test('parses plan handoff command-line options', () => {
   expect(
     readCommandLine([
@@ -150,7 +110,6 @@ test('parses plan handoff command-line options', () => {
       planFile: '/tmp/plan.md',
       planResultFile: '/tmp/result.json',
       repositoryPathProvided: true,
-      walkthrough: false,
     },
     repositoryPath: '/repo',
   });
@@ -164,7 +123,6 @@ test('parses positional HEAD revisions as commit sources', () => {
         ref: 'HEAD',
         type: 'commit',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: null,
@@ -177,7 +135,6 @@ test('parses positional HEAD revisions as commit sources', () => {
         ref: 'HEAD^1',
         type: 'commit',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: '/repo',
@@ -198,7 +155,6 @@ test('parses plain refs as branch sources', async () => {
         ref: 'feature',
         type: 'branch-working-tree',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: null,
@@ -211,7 +167,6 @@ test('parses plain refs as branch sources', async () => {
         ref: 'feature',
         type: 'branch-working-tree',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: directory.path,
@@ -231,7 +186,6 @@ test('parses missing plain refs in Git repositories as branch sources', async ()
         ref: 'definitely-missing-branch',
         type: 'branch-working-tree',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: null,
@@ -244,7 +198,6 @@ test('parses missing plain refs in Git repositories as branch sources', async ()
         ref: 'definitely-missing-branch',
         type: 'branch-working-tree',
       },
-      walkthrough: false,
     },
     pullRequestNumber: null,
     repositoryPath: directory.path,
@@ -270,88 +223,6 @@ test('parses hex-like refs as commits before branches', async () => {
   expect(readCommandLine(['codiff', '--branch', shortHash]).launchOptions.source).toEqual({
     ref: shortHash,
     type: 'branch-working-tree',
-  });
-});
-
-test('parses Codex walkthrough seed command-line options', async () => {
-  await using directory = await createTemporaryDirectory('codiff-context-');
-  const contextPath = join(directory.path, 'seed.json');
-
-  await writeFile(
-    contextPath,
-    JSON.stringify({
-      objective: 'Make walkthroughs reuse the creating Codex session.',
-      messages: [
-        {
-          role: 'user',
-          text: 'Open Codiff with the context from this implementation session.',
-        },
-        {
-          role: 'developer',
-          text: 'Internal instruction that should not be included.',
-        },
-        {
-          role: 'assistant',
-          text: 'I wired the skill handoff through launch options.',
-        },
-      ],
-      source: {
-        generatedAt: '2026-05-25T00:00:00.000Z',
-        threadId: 'context-file-thread',
-      },
-      version: 1,
-    }),
-  );
-
-  expect(
-    readCommandLine([
-      'codiff',
-      '--walkthrough',
-      '--codex-session',
-      'cli-thread',
-      '--walkthrough-context',
-      contextPath,
-      '/repo',
-    ]).launchOptions,
-  ).toEqual({
-    codexSessionId: 'cli-thread',
-    repositoryPathProvided: true,
-    walkthrough: true,
-    walkthroughContext: {
-      messages: [
-        {
-          role: 'user',
-          text: 'Open Codiff with the context from this implementation session.',
-        },
-        {
-          role: 'assistant',
-          text: 'I wired the skill handoff through launch options.',
-        },
-      ],
-      objective: 'Make walkthroughs reuse the creating Codex session.',
-      source: {
-        generatedAt: '2026-05-25T00:00:00.000Z',
-        threadId: 'context-file-thread',
-        type: 'codex-session',
-      },
-      version: 1,
-    },
-  });
-});
-
-test('parses Codex session ids without creating walkthrough context', () => {
-  expect(
-    readCommandLine([
-      'codiff',
-      '--walkthrough',
-      '--codex-session',
-      '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
-      '/repo',
-    ]).launchOptions,
-  ).toEqual({
-    codexSessionId: '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
-    repositoryPathProvided: true,
-    walkthrough: true,
   });
 });
 
@@ -464,7 +335,6 @@ test('does not restore over explicit launch intent', async () => {
       '/fallback',
       {
         repositoryPathProvided: true,
-        walkthrough: false,
       },
       directory.path,
       {},
@@ -479,30 +349,18 @@ test('does not restore over explicit launch intent', async () => {
           ref: 'HEAD',
           type: 'commit',
         },
-        walkthrough: false,
       },
       directory.path,
       {},
     ),
   ).toBe('/fallback');
-  expect(
-    getInitialRepositoryPath(
-      '/fallback',
-      {
-        repositoryPathProvided: false,
-        walkthrough: true,
-      },
-      directory.path,
-      {},
-    ),
-  ).toBe('/fallback');
+
   expect(
     getInitialRepositoryPath(
       '/fallback',
       {
         planFile: '/tmp/plan.md',
         repositoryPathProvided: false,
-        walkthrough: false,
       },
       directory.path,
       {},

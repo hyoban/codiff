@@ -9,7 +9,6 @@ import type {
   PullRequestReviewEvent,
   PullRequestReviewStatus,
   RepositoryState,
-  ReviewAssistantRequest,
 } from '../../types.ts';
 import { useReviewCommentDrafts } from './useReviewCommentDrafts.ts';
 
@@ -43,23 +42,6 @@ export function useAppReviewComments({
     updateActiveReviewCommentDraft,
   } = commentDrafts;
 
-  const updateCodexReply = useCallback(
-    (commentId: string, filePath: string, codexReply: NonNullable<ReviewComment['codexReply']>) => {
-      setReviewComments((current) =>
-        current.map((comment) =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                codexReply,
-              }
-            : comment,
-        ),
-      );
-      onCommentFileChange(filePath);
-    },
-    [onCommentFileChange],
-  );
-
   const updateRemoteSubmit = useCallback(
     (commentId: string, remoteSubmit: ReviewComment['remoteSubmit']) => {
       setReviewComments((current) =>
@@ -78,59 +60,6 @@ export function useAppReviewComments({
       }
     },
     [onCommentFileChange, reviewCommentsRef],
-  );
-
-  const askCodex = useCallback(
-    (commentId: string) => {
-      const currentState = stateRef.current;
-      const comment = reviewCommentsRef.current.find((candidate) => candidate.id === commentId);
-      if (
-        !currentState ||
-        !comment ||
-        comment.body.trim().length === 0 ||
-        comment.codexReply?.status === 'loading'
-      ) {
-        return;
-      }
-
-      const request: ReviewAssistantRequest = {
-        comment: {
-          body: comment.body,
-          filePath: comment.filePath,
-          ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
-          sectionId: comment.sectionId,
-          ...(comment.side ? { side: comment.side } : {}),
-          ...getReviewCommentRangeProps(comment),
-        },
-        source: currentState.source,
-      };
-
-      updateCodexReply(comment.id, comment.filePath, { status: 'loading' });
-      void window.codiff
-        .askReviewAssistant(request)
-        .then((result) => {
-          updateCodexReply(
-            comment.id,
-            comment.filePath,
-            result.status === 'ready'
-              ? {
-                  body: result.reply,
-                  status: 'ready',
-                }
-              : {
-                  error: result.reason,
-                  status: 'error',
-                },
-          );
-        })
-        .catch((error: unknown) => {
-          updateCodexReply(comment.id, comment.filePath, {
-            error: error instanceof Error ? error.message : String(error),
-            status: 'error',
-          });
-        });
-    },
-    [reviewCommentsRef, stateRef, updateCodexReply],
   );
 
   const submitPullRequestComment = useCallback(
@@ -252,7 +181,7 @@ export function useAppReviewComments({
 
   return {
     ...commentDrafts,
-    askCodex,
+
     hasPendingReviewComments,
     pullRequestReviewSubmitting,
     reviewComments,

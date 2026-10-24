@@ -1,15 +1,5 @@
 # @nkzw/codiff-core
 
-Reusable code diffing primitives from Codiff.
+Reusable diffing types and Markdown plan review components from Codiff.
 
-## Example
-
-```tsx
-import type { SharedWalkthroughSnapshot } from '@nkzw/codiff-core';
-import { ReviewSurface } from '@nkzw/codiff-core/react';
-import '@nkzw/codiff-core/styles.css';
-
-export function Review({ snapshot }: { snapshot: SharedWalkthroughSnapshot }) {
-  return <ReviewSurface snapshot={snapshot} />;
-}
-```
+Import plan validation helpers from `@nkzw/codiff-core/share` and `PlanReviewSurface` from `@nkzw/codiff-core/react`.

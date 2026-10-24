@@ -4,7 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { parseArgs } = require('node:util');
-const { readWalkthroughContext } = require('../walkthrough-context.cjs');
+
 const { parseReviewUrl, resolveReviewUrl } = require('../review-source.cjs');
 
 /**
@@ -120,35 +120,11 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       branch: {
         type: 'string',
       },
-      walkthrough: {
-        short: 'w',
-        type: 'boolean',
-      },
-      agent: {
-        type: 'string',
-      },
-      'claude-session': {
-        type: 'string',
-      },
-      'codex-session': {
-        type: 'string',
-      },
-      'opencode-session': {
-        type: 'string',
-      },
-      'pi-session': {
-        type: 'string',
-      },
+
       'plan-file': {
         type: 'string',
       },
       'plan-result-file': {
-        type: 'string',
-      },
-      'walkthrough-context': {
-        type: 'string',
-      },
-      'walkthrough-file': {
         type: 'string',
       },
     },
@@ -248,55 +224,16 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     : null;
   const envPullRequestUrl = useEnvironment ? process.env.CODIFF_PULL_REQUEST_URL || '' : '';
   const envReviewProvider = useEnvironment ? process.env.CODIFF_REVIEW_PROVIDER || '' : '';
-  const envCodexSessionId = useEnvironment ? process.env.CODIFF_CODEX_SESSION_ID || '' : '';
-  const envClaudeSessionId = useEnvironment ? process.env.CODIFF_CLAUDE_SESSION_ID || '' : '';
-  const envOpenCodeSessionId = useEnvironment ? process.env.CODIFF_OPENCODE_SESSION_ID || '' : '';
-  const envPiSessionId = useEnvironment ? process.env.CODIFF_PI_SESSION_ID || '' : '';
+
   const envPlanFilePath = useEnvironment ? process.env.CODIFF_PLAN_FILE || '' : '';
   const envPlanResultFilePath = useEnvironment ? process.env.CODIFF_PLAN_RESULT_FILE || '' : '';
-  const envAgentBackend = useEnvironment ? process.env.CODIFF_AGENT_BACKEND || '' : '';
-  const envWalkthroughContextPath = useEnvironment
-    ? process.env.CODIFF_WALKTHROUGH_CONTEXT || ''
-    : '';
-  const envWalkthroughFilePath = useEnvironment ? process.env.CODIFF_WALKTHROUGH_FILE || '' : '';
-  const codexSessionId =
-    (typeof values['codex-session'] === 'string' ? values['codex-session'] : '') ||
-    envCodexSessionId ||
-    undefined;
-  const claudeSessionId =
-    (typeof values['claude-session'] === 'string' ? values['claude-session'] : '') ||
-    envClaudeSessionId ||
-    undefined;
-  const opencodeSessionId =
-    (typeof values['opencode-session'] === 'string' ? values['opencode-session'] : '') ||
-    envOpenCodeSessionId ||
-    undefined;
-  const piSessionId =
-    (typeof values['pi-session'] === 'string' ? values['pi-session'] : '') ||
-    envPiSessionId ||
-    undefined;
+
   const planFilePath = requestedPlanFilePath || envPlanFilePath || undefined;
   const planResultFilePath =
     (typeof values['plan-result-file'] === 'string' ? values['plan-result-file'] : '') ||
     envPlanResultFilePath ||
     undefined;
-  const rawAgentBackend =
-    (typeof values.agent === 'string' ? values.agent : '') || envAgentBackend || '';
-  const agentBackend =
-    rawAgentBackend === 'codex' ||
-    rawAgentBackend === 'claude' ||
-    rawAgentBackend === 'opencode' ||
-    rawAgentBackend === 'pi'
-      ? rawAgentBackend
-      : undefined;
-  const walkthroughContextPath =
-    (typeof values['walkthrough-context'] === 'string' ? values['walkthrough-context'] : '') ||
-    envWalkthroughContextPath ||
-    undefined;
-  const walkthroughFilePath =
-    (typeof values['walkthrough-file'] === 'string' ? values['walkthrough-file'] : '') ||
-    envWalkthroughFilePath ||
-    undefined;
+
   const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
   const sourceReviewProvider =
     envReviewProvider === 'github' || envReviewProvider === 'gitlab'
@@ -317,11 +254,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   return {
     launchOptions: {
       ...(values['apply-update'] === true ? { applyUpdate: true } : {}),
-      ...(agentBackend ? { agentBackend } : {}),
-      ...(claudeSessionId ? { claudeSessionId } : {}),
-      ...(codexSessionId ? { codexSessionId } : {}),
-      ...(opencodeSessionId ? { opencodeSessionId } : {}),
-      ...(piSessionId ? { piSessionId } : {}),
+
       ...(planFilePath ? { planFile: resolve(planFilePath) } : {}),
       ...(planResultFilePath ? { planResultFile: resolve(planResultFilePath) } : {}),
       repositoryPathProvided,
@@ -350,12 +283,6 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
                     type: 'branch-working-tree',
                   }
                 : undefined,
-      walkthrough:
-        (useEnvironment && process.env.CODIFF_WALKTHROUGH === '1') || values.walkthrough === true,
-      ...(walkthroughContextPath
-        ? { walkthroughContext: readWalkthroughContext(walkthroughContextPath, codexSessionId) }
-        : {}),
-      ...(walkthroughFilePath ? { walkthroughFile: resolve(walkthroughFilePath) } : {}),
     },
     pullRequestNumber: sourcePullRequestNumber,
     ...(sourceReviewProvider ? { pullRequestProvider: sourceReviewProvider } : {}),
@@ -414,7 +341,6 @@ const getInitialRepositoryPath = (
     !environment.CODIFF_REPOSITORY_PATH &&
     !launchOptions.repositoryPathProvided &&
     !launchOptions.source &&
-    !launchOptions.walkthrough &&
     !launchOptions.planFile
   ) {
     return resolve(lastRepositoryPath);

@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { matchesShortcut } from '../../config/keymap.ts';
 import type { CodiffKeymap } from '../../config/types.ts';
-import type { PullRequestSource, SidebarMode, WalkthroughError } from '../../lib/app-types.ts';
+import type { PullRequestSource, SidebarMode } from '../../lib/app-types.ts';
 import { isNativeInputTarget } from '../../lib/keyboard.ts';
 import { getShortRef, getSourceKey } from '../../lib/source.ts';
-import type { ChangedFile, HistoryEntry, NarrativeWalkthrough, ReviewSource } from '../../types.ts';
+import type { ChangedFile, HistoryEntry, ReviewSource } from '../../types.ts';
 import { Avatar } from './Avatar.tsx';
 import { Button } from './Button.tsx';
 import { DiffSummaryFooter } from './DiffSummaryFooter.tsx';
 import { ReviewFileTree } from './FileTree.tsx';
-import { NarrativeSidebar } from './walkthrough/NarrativeSidebar.tsx';
-import type { NarrativeNavigation } from './walkthrough/useNarrativeNavigation.ts';
-import { WalkthroughProgress } from './walkthrough/WalkthroughProgress.tsx';
 
 export function Sidebar({
   branchSource,
@@ -24,25 +21,21 @@ export function Sidebar({
   historyLoading,
   keymap,
   mode,
-  narrativeNavigation,
-  narrativeWalkthrough,
+
   onActivatePath,
   onLoadMoreHistory,
   onSearchQueryChange,
   onSelectSource,
-  onShareWalkthrough,
+
   onToggleCommitView,
   pullRequestSource,
   reloadDeltaPaths,
   searchQuery,
   selectedPath,
-  shareWalkthroughDisabled,
+
   showWhitespace,
   summaryLoading,
   viewed,
-  walkthroughError,
-  walkthroughLoading,
-  walkthroughProgress,
 }: {
   branchSource: Extract<ReviewSource, { type: 'branch-diff' }> | null;
   commitFiles: ReadonlyArray<ChangedFile>;
@@ -54,29 +47,21 @@ export function Sidebar({
   historyLoading: boolean;
   keymap: CodiffKeymap;
   mode: SidebarMode;
-  narrativeNavigation: NarrativeNavigation;
-  narrativeWalkthrough: NarrativeWalkthrough | null;
+
   onActivatePath: (path: string) => void;
   onLoadMoreHistory: () => void;
   onSearchQueryChange: (query: string) => void;
   onSelectSource: (source: ReviewSource) => void;
-  onShareWalkthrough?: () => void;
+
   onToggleCommitView: () => void;
   pullRequestSource: PullRequestSource | null;
   reloadDeltaPaths: ReadonlySet<string>;
   searchQuery: string;
   selectedPath: string | null;
-  shareWalkthroughDisabled?: boolean;
+
   showWhitespace: boolean;
   summaryLoading: boolean;
   viewed: Record<string, string>;
-  walkthroughError: WalkthroughError | null;
-  walkthroughLoading: boolean;
-  walkthroughProgress: {
-    phase: import('../../types.ts').WalkthroughProgressPhase | null;
-    responseLabelIndex: number;
-    stageRevision: number;
-  };
 }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const showCommitButton =
@@ -124,34 +109,6 @@ export function Sidebar({
           pullRequestSource={pullRequestSource}
           searchQuery={searchQuery}
         />
-      ) : mode === 'walkthrough' && narrativeWalkthrough ? (
-        <NarrativeSidebar
-          files={commitFiles}
-          navigation={narrativeNavigation}
-          onShareWalkthrough={onShareWalkthrough}
-          shareWalkthroughDisabled={shareWalkthroughDisabled}
-          showWhitespace={showWhitespace}
-          walkthrough={narrativeWalkthrough}
-        />
-      ) : mode === 'walkthrough' ? (
-        <>
-          {walkthroughLoading ? (
-            <div className="sidebar-walkthrough-status-shell">
-              <div className="sidebar-walkthrough-status codex">
-                <WalkthroughProgress
-                  phase={walkthroughProgress.phase}
-                  responseLabelIndex={walkthroughProgress.responseLabelIndex}
-                  stageRevision={walkthroughProgress.stageRevision}
-                />
-              </div>
-            </div>
-          ) : walkthroughError ? (
-            <div className="sidebar-walkthrough-status" title={walkthroughError.reason}>
-              <strong>Walkthrough unavailable</strong>
-              <span>{walkthroughError.reason}</span>
-            </div>
-          ) : null}
-        </>
       ) : (
         <ReviewFileTree
           files={files}

@@ -133,7 +133,7 @@ _codiff() {
   local current flag
   current="\${COMP_WORDS[COMP_CWORD]}"
   flag="\${COMP_WORDS[COMP_CWORD - 1]}"
-  # \`=\` is one of bash's word break characters, so \`--agent=codex\` arrives as
+  # \`=\` is one of bash's word break characters, so \`--completions=bash\` arrives as
   # three words and the flag is two words back.
   if [[ "$flag" == '=' && $COMP_CWORD -ge 2 ]]; then
     flag="\${COMP_WORDS[COMP_CWORD - 2]}"

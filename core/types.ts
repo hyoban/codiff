@@ -253,13 +253,6 @@ export type RepositoryState = {
 
 export type CodiffFeatureFlags = {
   planSharing: boolean;
-  walkthroughSharing: boolean;
-};
-
-export type WalkthroughProgressPhase = 'agent-generation' | 'response-received';
-
-export type WalkthroughProgressEvent = {
-  phase: WalkthroughProgressPhase;
 };
 
 export type CodiffMarkdownDocument = {
@@ -349,28 +342,6 @@ export type PlanReview = {
 
 export type PlanHandoffStatus = 'closed' | 'done';
 
-export type SharedWalkthroughSnapshot = {
-  branch: string | null;
-  codeQualityFindings?: ReadonlyArray<PullRequestCodeQualityFinding>;
-  codiffVersion: string;
-  exportedAt: string;
-  files: ReadonlyArray<ChangedFile>;
-  kind: 'codiff-walkthrough-share';
-  preferences: Pick<
-    CodiffPreferences,
-    'codeFontFamily' | 'codeFontSize' | 'diffStyle' | 'showWhitespace' | 'theme' | 'wordWrap'
-  >;
-  repository: {
-    generalComments?: ReadonlyArray<PullRequestGeneralCommentThread>;
-    root: string;
-    source: ReviewSource;
-    title?: string;
-  };
-  reviewComments?: ReadonlyArray<PullRequestExistingReviewComment>;
-  version: 1;
-  walkthrough: NarrativeWalkthrough;
-};
-
 export type SharedPlanSnapshot = {
   codiffVersion: string;
   document: {
@@ -385,14 +356,8 @@ export type SharedPlanSnapshot = {
     threads: ReadonlyArray<PlanCommentThread>;
     version: 1;
   };
-  source?: {
-    agent?: 'claude' | 'codex' | 'opencode' | 'pi';
-    sessionId?: string;
-  };
   version: 1;
 };
-
-export type WalkthroughShareManifestV1 = SharedWalkthroughSnapshot;
 
 export type ShareResult =
   | {
@@ -405,66 +370,17 @@ export type ShareResult =
     };
 
 export type SharePlanResult = ShareResult;
-export type ShareWalkthroughResult = ShareResult;
-
-export type WalkthroughContext = {
-  changedFiles?: ReadonlyArray<{
-    path: string;
-    rationale?: string;
-    role: string;
-  }>;
-  constraints?: ReadonlyArray<string>;
-  decisions?: ReadonlyArray<string>;
-  implementationSummary?: string;
-  messages?: ReadonlyArray<{
-    role: 'assistant' | 'user';
-    text: string;
-  }>;
-  objective?: string;
-  risks?: ReadonlyArray<string>;
-  source: {
-    generatedAt: string;
-    threadId?: string;
-    type:
-      | 'codex-session'
-      | 'codex-session-excerpt'
-      | 'claude-session'
-      | 'claude-session-excerpt'
-      | 'opencode-session'
-      | 'opencode-session-excerpt'
-      | 'pi-session'
-      | 'pi-session-excerpt';
-  };
-  validation?: ReadonlyArray<string>;
-  version: 1;
-};
 
 export type CodiffLaunchOptions = {
-  agentBackend?: 'codex' | 'claude' | 'opencode' | 'pi';
   applyUpdate?: boolean;
-  claudeSessionId?: string;
-  codexSessionId?: string;
-  opencodeSessionId?: string;
-  piSessionId?: string;
+
   /** Exact Markdown file opened by the blocking plan handoff. */
   planFile?: string;
-  /** Result file used to resume the waiting agent process. */
+  /** Result file used to resume the waiting CLI process. */
   planResultFile?: string;
   repositoryPathProvided: boolean;
   source?: ReviewSource;
-  walkthrough: boolean;
-  walkthroughContext?: WalkthroughContext;
-  /** Path to a pre-authored {@link NarrativeWalkthrough} JSON file (--walkthrough-file). */
-  walkthroughFile?: string;
 };
-
-export type AgentSkillStatus = {
-  installed: boolean;
-  path: string;
-};
-
-/** @deprecated Use {@link AgentSkillStatus}. */
-export type CodexSkillStatus = AgentSkillStatus;
 
 export type TerminalHelperStatus = {
   command: string;
@@ -472,15 +388,7 @@ export type TerminalHelperStatus = {
   path: string;
 };
 
-/**
- * Narrative Walkthrough. The agent authors chapters, stops, and support groups
- * around deterministic hunk ids. Codiff resolves those ids against the live diff
- * and computes file paths, anchors, and line counts.
- */
-export type WalkthroughIcon = 'bug' | 'wrench' | 'path' | 'flask' | 'beaker' | 'doc' | 'gear';
-
-/** Where a walkthrough hunk points into the live diff. */
-export type WalkthroughAnchor = {
+export type ReviewHunkAnchor = {
   /** Human-readable location, e.g. 'src/App.tsx:311' or 'src/hooks/useHunkOrder.ts (new)'. */
   display: string;
   /** End line on the {@link side} (inclusive). */
@@ -493,33 +401,11 @@ export type WalkthroughAnchor = {
   startLine?: number;
 };
 
-/** A short header note rendered above one focused walkthrough hunk diff. */
-export type WalkthroughHunkNote = {
-  body: string;
-  hunkId: string;
-};
-
-/**
- * Change-type tag shown on a file row in the commit composer. Mirrors the
- * walkthrough's narrative roles so a reviewer recognises each file at a glance.
- */
-export type WalkthroughChangeType =
-  | 'fix'
-  | 'feature'
-  | 'refactor'
-  | 'test'
-  | 'generated'
-  | 'lockfile'
-  | 'snapshot'
-  | 'i18n'
-  | 'docs';
-
-/** One resolved hunk selected by a walkthrough item, in agent-requested order. */
-export type WalkthroughHunk = {
+export type ReviewHunk = {
   added: number;
   additionEnd?: number;
   additionStart?: number;
-  anchor: WalkthroughAnchor;
+  anchor: ReviewHunkAnchor;
   deleted: number;
   deletionEnd?: number;
   deletionStart?: number;
@@ -532,116 +418,11 @@ export type WalkthroughHunk = {
 };
 
 /** Shared hunk-backed fields for a stop or support group. */
-export type WalkthroughHunkGroup = {
-  added: number;
-  /** Change-type tag for the commit composer's file row. */
-  changeType?: WalkthroughChangeType;
-  /** One-line note the generated commit body uses for this file (falls back to {@link summary}). */
-  commitNote?: string;
-  deleted: number;
-  /** Deterministic hunk ids selected by the authoring agent, in display order. */
-  hunkIds: ReadonlyArray<string>;
-  /** Resolved hunks with Codiff-computed anchors, file paths, status, and line counts. */
-  hunks: ReadonlyArray<WalkthroughHunk>;
-  /** Stable within the document, e.g. 's1'. */
-  id: string;
-  /** Optional header notes for individual hunk ids in this item. */
-  notes?: ReadonlyArray<WalkthroughHunkNote>;
-  /** Short, plain-text gist of the slice. */
-  summary?: string;
-  title?: string;
-};
-
-/** One stop in the main walkthrough path. */
-export type WalkthroughStop = WalkthroughHunkGroup & {
-  importance: 'critical' | 'normal' | 'context';
-  /** Agent narration (markdown / inline code). */
-  prose: string;
-};
 
 /** A changed hunk group kept off the main path. */
-export type WalkthroughSupportGroup = WalkthroughHunkGroup & {
-  note?: string;
-  /** Why it is off the path, e.g. 'Generated' | 'Lockfile' | 'Snapshot' | 'Mechanical'. */
-  reason: string;
-};
 
-/** A named chapter in the walkthrough. */
-export type WalkthroughChapter = {
-  blurb: string;
-  icon: WalkthroughIcon;
-  id: string;
-  stops: ReadonlyArray<WalkthroughStop>;
-  title: string;
-};
-
-/**
- * Marks the walkthrough's diff as a staging set that can be committed and seeds
- * the commit composer Codiff renders as the walkthrough's terminal stop. Only
- * honored when {@link NarrativeWalkthrough.source} is a working tree — you can
- * only commit a live staging set, never a past commit, branch, or pull request.
- */
-export type WalkthroughCommit = {
-  /**
-   * The agent-drafted commit body — a few paragraphs of prose describing the
-   * change as a whole. Shown editable by default; the reviewer can rewrite it,
-   * or ask the agent to regenerate it for a narrowed file selection.
-   */
-  body?: string;
-  /** Suggested first line for the commit message. */
-  title?: string;
-};
-
-export type NarrativeWalkthrough = {
-  agent: 'codex' | 'claude' | 'opencode' | 'pi';
-  chapters: ReadonlyArray<WalkthroughChapter>;
-  /**
-   * When present, the diff is a committable staging set: Codiff adds a commit
-   * composer at the end of the walkthrough. Stripped unless `source` is a working tree.
-   */
-  commit?: WalkthroughCommit;
-  /** The originating conversation, embedded for in-app Q&A. */
-  context?: WalkthroughContext;
-  /** 1–2 sentence summary of the change. */
-  focus: string;
-  /** ISO timestamp. */
-  generatedAt: string;
-  kind: 'narrative';
-  /** Display string, e.g. '6 stops · 4 chapters'. */
-  meta?: string;
-  repo: {
-    branch: string | null;
-    root: string;
-  };
-  source: ReviewSource;
-  support: ReadonlyArray<WalkthroughSupportGroup>;
-  title: string;
-  version: 4;
-};
-
-export type NarrativeWalkthroughResult =
-  | {
-      status: 'ready';
-      walkthrough: NarrativeWalkthrough;
-    }
-  | {
-      code?: 'CODEX_NOT_FOUND' | 'CLAUDE_NOT_FOUND' | 'OPENCODE_NOT_FOUND' | 'PI_NOT_FOUND';
-      reason: string;
-      status: 'unavailable';
-    };
-
-export type NarrativeWalkthroughRequestOptions = {
-  /** Ignore an exact cache hit and replace it with a newly generated result. */
-  force?: boolean;
-  /**
-   * The walkthrough currently shown. Regeneration uses its prose as continuity
-   * while re-anchoring every stop against the current diff.
-   */
-  previousWalkthrough?: NarrativeWalkthrough;
-};
-
-/** Commit the selected files from a walkthrough's staging set. */
-export type WalkthroughCommitRequest = {
+/** Commit the selected working tree files. */
+export type CommitRequest = {
   /** Body of the commit message (everything after the subject line). */
   body: string;
   /** Repo-relative paths to commit; other staged changes are left untouched. */
@@ -651,7 +432,7 @@ export type WalkthroughCommitRequest = {
   subject: string;
 };
 
-export type WalkthroughCommitResult =
+export type CommitResult =
   | {
       /** Full SHA of the new commit. */
       hash: string;
@@ -660,65 +441,6 @@ export type WalkthroughCommitResult =
   | {
       reason: string;
       status: 'failed';
-    };
-
-/**
- * Ask the connected agent to rewrite the commit message for the current file
- * selection — used when the reviewer drops files from the staging set and the
- * pre-drafted body no longer matches what is being committed.
- */
-export type WalkthroughCommitMessageRequest = {
-  /** The current body, given to the agent as the message to revise. */
-  body: string;
-  /** Repo-relative paths still selected for the commit. */
-  paths: ReadonlyArray<string>;
-  source?: ReviewSource;
-  /** The current subject line. */
-  subject: string;
-};
-
-export type WalkthroughCommitMessageResult =
-  | {
-      body: string;
-      status: 'ready';
-      subject: string;
-    }
-  | {
-      reason: string;
-      status: 'unavailable';
-    };
-
-export type ReviewAssistantRequest = {
-  comment: {
-    anchor?: 'file' | 'line';
-    body: string;
-    filePath: string;
-    lineNumber?: number;
-    sectionId: string;
-    side?: 'additions' | 'deletions';
-    startLineNumber?: number;
-    startSide?: 'additions' | 'deletions';
-  };
-  source?: ReviewSource;
-  walkthroughNote?: {
-    action: 'review' | 'scan' | 'skim';
-    context: string;
-    groupReason: string;
-    groupTitle: string;
-    impact: 'wide' | 'contained' | 'mechanical';
-    reason: string;
-  };
-};
-
-export type ReviewAssistantResult =
-  | {
-      reply: string;
-      status: 'ready';
-    }
-  | {
-      code?: 'CODEX_NOT_FOUND' | 'CLAUDE_NOT_FOUND' | 'OPENCODE_NOT_FOUND' | 'PI_NOT_FOUND';
-      reason: string;
-      status: 'unavailable';
     };
 
 export type GitIdentity = {
@@ -792,8 +514,6 @@ export type DiffImageContentResult =
 export type CodiffTheme = 'system' | 'light' | 'dark';
 
 export type CodiffPreferences = {
-  agentBackend: 'codex' | 'claude' | 'opencode' | 'pi';
-  claudeModel: string;
   codeFontFamily: string;
   codeFontSize: number;
   copyCommentsOnClose: boolean;
@@ -801,17 +521,14 @@ export type CodiffPreferences = {
   editorCommand: string;
   expandUnchanged: boolean;
   lastRepositoryPath: string;
-  openAIModel: string;
-  openAIReasoningEffort: string;
-  opencodeModel: string;
-  piModel: string;
+
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
   showOutdated: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
   theme: CodiffTheme;
-  walkthroughPrompt: string;
+
   wordWrap: boolean;
 };
 

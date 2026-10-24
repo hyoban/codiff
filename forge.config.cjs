@@ -16,7 +16,7 @@ const macAssetCatalogPath = existsSync(join(__dirname, 'electron/icons/Assets.ca
   : undefined;
 const linuxIconPath = './electron/icons/icon.png';
 const windowsIconPath = './electron/icons/icon.ico';
-const walkthroughDiffRuntimePath = 'core/lib/narrative-walkthrough-diff.cjs';
+const diffHunksRuntimePath = 'core/lib/diff-hunks.cjs';
 const skipSquirrel = process.env.CODIFF_SKIP_SQUIRREL === '1';
 const osxNotarize =
   process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
@@ -53,8 +53,8 @@ const osxNotarize =
 module.exports = {
   hooks: {
     packageAfterCopy: async (_forgeConfig, buildPath) => {
-      const source = join(__dirname, walkthroughDiffRuntimePath);
-      const destination = join(buildPath, walkthroughDiffRuntimePath);
+      const source = join(__dirname, diffHunksRuntimePath);
+      const destination = join(buildPath, diffHunksRuntimePath);
 
       await mkdir(dirname(destination), { recursive: true });
       await copyFile(source, destination);

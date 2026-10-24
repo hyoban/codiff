@@ -16,6 +16,5 @@ test('enables live subscriptions for every shared service entity', () => {
     'ShareStats',
     'ShareStatsDay',
     'UploadIntent',
-    'Walkthrough',
   ]);
 });

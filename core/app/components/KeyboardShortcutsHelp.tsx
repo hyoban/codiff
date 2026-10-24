@@ -44,7 +44,7 @@ const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
   {
     shortcuts: [
       { action: 'submitComment', label: 'Add comment' },
-      { action: 'askAgent', label: 'Ask the agent' },
+
       { action: 'discardComment', label: 'Discard comment' },
     ],
     title: 'Comments',

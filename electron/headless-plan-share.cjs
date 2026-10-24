@@ -5,8 +5,8 @@ const { dirname, join, resolve } = require('node:path');
 const { readConfig } = require('./config.cjs');
 const { readGitIdentity } = require('./git-state.cjs');
 const { createSharedPlanSnapshot } = require('./shared-plan.cjs');
-const { uploadSnapshot } = require('./headless-walkthrough-share.cjs');
-const { resolvePlanShareTarget } = require('./walkthrough-sharing.cjs');
+const { uploadSnapshot } = require('./share-upload.cjs');
+const { resolvePlanShareTarget } = require('./sharing.cjs');
 
 /** @param {string} repositoryPath */
 const hasGitMetadata = (repositoryPath) => {
@@ -25,25 +25,21 @@ const hasGitMetadata = (repositoryPath) => {
 
 /**
  * @param {{
- *   agent?: 'claude' | 'codex' | 'opencode' | 'pi';
  *   codiffVersion: string;
  *   forcePublic?: boolean;
  *   openExternal: (url: string) => Promise<void>;
  *   planFile: string;
  *   repositoryPath: string;
  *   serviceUrlOverride?: string;
- *   sessionId?: string;
  * }} options
  */
 const sharePlanFile = async ({
-  agent,
   codiffVersion,
   forcePublic,
   openExternal,
   planFile,
   repositoryPath,
   serviceUrlOverride,
-  sessionId,
 }) => {
   const config = readConfig();
   const uploader = hasGitMetadata(repositoryPath) ? await readGitIdentity(repositoryPath) : {};
@@ -63,12 +59,10 @@ const sharePlanFile = async ({
     openExternal,
     serviceUrlOverride,
     snapshot: createSharedPlanSnapshot({
-      agent,
       codiffVersion,
       content,
       filePath: planFile,
       review,
-      sessionId,
       theme: config.settings.theme,
     }),
     target: resolvePlanShareTarget({

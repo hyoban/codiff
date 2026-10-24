@@ -8,12 +8,6 @@ const { parseReviewUrl, resolveReviewUrl } = reviewSource;
 
 export const flagDefinitions = [
   {
-    argument: '<codex|claude|opencode|pi>',
-    description: 'Override the agent backend for this session.',
-    name: 'agent',
-    type: 'string',
-  },
-  {
     argument: '<ref>',
     // With the source given as a flag, the positional argument can only be the
     // repository path.
@@ -22,12 +16,7 @@ export const flagDefinitions = [
     name: 'branch',
     type: 'string',
   },
-  {
-    argument: '<id>',
-    description: 'Attach Claude Code session metadata to a walkthrough.',
-    name: 'claude-session',
-    type: 'string',
-  },
+
   {
     argument: '<ref>',
     consumesSource: true,
@@ -35,12 +24,7 @@ export const flagDefinitions = [
     name: 'commit',
     type: 'string',
   },
-  {
-    argument: '<id>',
-    description: 'Attach Codex session metadata to a walkthrough.',
-    name: 'codex-session',
-    type: 'string',
-  },
+
   {
     argument: '<bash|fish|zsh>',
     description: 'Print a shell completion script, then exit.',
@@ -48,18 +32,7 @@ export const flagDefinitions = [
     type: 'string',
   },
   { description: 'Show this help message and exit.', name: 'help', short: 'h', type: 'boolean' },
-  {
-    argument: '<id>',
-    description: 'Attach OpenCode session metadata to a walkthrough.',
-    name: 'opencode-session',
-    type: 'string',
-  },
-  {
-    argument: '<id>',
-    description: 'Attach Pi session metadata to a walkthrough.',
-    name: 'pi-session',
-    type: 'string',
-  },
+
   {
     argument: '<file>',
     consumesSource: true,
@@ -68,7 +41,7 @@ export const flagDefinitions = [
     type: 'string',
   },
   {
-    description: 'Share a walkthrough or a --plan file, then print its URL.',
+    description: 'Share a --plan file, then print its URL.',
     name: 'share',
     type: 'boolean',
   },
@@ -81,29 +54,6 @@ export const flagDefinitions = [
     description: 'Show version number and exit.',
     name: 'version',
     short: 'v',
-    type: 'boolean',
-  },
-  {
-    description: 'Start an LLM walkthrough; use HEAD when there are no local changes.',
-    name: 'walkthrough',
-    short: 'w',
-    type: 'boolean',
-  },
-  {
-    argument: '<file>',
-    description: 'Seed a walkthrough with Codex conversation context JSON.',
-    name: 'walkthrough-context',
-    type: 'string',
-  },
-  {
-    argument: '<file>',
-    description: 'Open a pre-authored narrative walkthrough JSON file.',
-    name: 'walkthrough-file',
-    type: 'string',
-  },
-  {
-    description: 'Print the narrative walkthrough authoring guide and schema, then exit.',
-    name: 'walkthrough-guide',
     type: 'boolean',
   },
 ];
@@ -123,10 +73,6 @@ const usageExamples = [
   { command: 'codiff update', description: 'Update Codiff to the latest release.' },
   { command: 'codiff --plan plan.md', description: 'Edit a plan and wait for handoff.' },
   { command: 'codiff --plan plan.md --share', description: 'Share a Markdown plan.' },
-  { command: 'codiff -w', description: 'Walk through local changes, or HEAD when clean.' },
-  { command: 'codiff -w a1b2c3d', description: 'Generate a narrative walkthrough for a commit.' },
-  { command: 'codiff --share', description: 'Share local changes, or HEAD when clean.' },
-  { command: 'codiff --share HEAD', description: 'Share a walkthrough for a commit.' },
 ];
 
 export const getReviewSource = ({
@@ -325,15 +271,15 @@ export const parseArguments = (args) => {
     strict: false,
   });
 
+  for (const name of Object.keys(values)) {
+    if (!Object.hasOwn(parseArgsOptions, name)) {
+      throw new Error(`Unknown option: --${name}`);
+    }
+  }
+
   let commitRef = typeof values.commit === 'string' ? values.commit : null;
   let branchRef = typeof values.branch === 'string' ? values.branch : null;
-  const codexSessionId =
-    typeof values['codex-session'] === 'string' ? values['codex-session'] : null;
-  const claudeSessionId =
-    typeof values['claude-session'] === 'string' ? values['claude-session'] : null;
-  const opencodeSessionId =
-    typeof values['opencode-session'] === 'string' ? values['opencode-session'] : null;
-  const piSessionId = typeof values['pi-session'] === 'string' ? values['pi-session'] : null;
+
   const planFilePath = typeof values.plan === 'string' ? values.plan : null;
   // `--completions` without a value parses as `true`; keep it as an empty shell
   // so the command can tell "no shell given" apart from "flag not used".
@@ -343,13 +289,7 @@ export const parseArguments = (args) => {
       : values.completions === true
         ? ''
         : null;
-  const agentBackend =
-    values.agent === 'codex' ||
-    values.agent === 'claude' ||
-    values.agent === 'opencode' ||
-    values.agent === 'pi'
-      ? values.agent
-      : null;
+
   let pullRequestBranch = null;
   let pullRequestNumber = null;
   let pullRequestProvider = null;
@@ -357,10 +297,6 @@ export const parseArguments = (args) => {
   let requestedPath = null;
   let sourceCandidate = null;
   let rangeCandidate = null;
-  const walkthroughContextPath =
-    typeof values['walkthrough-context'] === 'string' ? values['walkthrough-context'] : null;
-  const walkthroughFilePath =
-    typeof values['walkthrough-file'] === 'string' ? values['walkthrough-file'] : null;
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
@@ -448,11 +384,6 @@ export const parseArguments = (args) => {
   }
 
   return {
-    ...(agentBackend ? { agentBackend } : {}),
-    ...(claudeSessionId ? { claudeSessionId } : {}),
-    ...(codexSessionId ? { codexSessionId } : {}),
-    ...(opencodeSessionId ? { opencodeSessionId } : {}),
-    ...(piSessionId ? { piSessionId } : {}),
     ...(planFilePath ? { planFilePath: resolve(planFilePath) } : {}),
     ...(branchRef ? { branchRef } : {}),
     ...(range ? { range } : {}),
@@ -467,9 +398,5 @@ export const parseArguments = (args) => {
     requestedPath: resolve(requestedPath ?? process.cwd()),
     ...(values.share === true ? { share: true } : {}),
     version: values.version === true,
-    walkthrough: values.walkthrough === true || (values.share === true && !planFilePath),
-    ...(values['walkthrough-guide'] === true ? { walkthroughGuide: true } : {}),
-    ...(walkthroughContextPath ? { walkthroughContextPath: resolve(walkthroughContextPath) } : {}),
-    ...(walkthroughFilePath ? { walkthroughFilePath: resolve(walkthroughFilePath) } : {}),
   };
 };

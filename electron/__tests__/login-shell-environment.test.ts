@@ -17,7 +17,7 @@ const { getCommandEnvironment, getLoginShellEnvironment, resolveLoginShellEnviro
       timeout?: number,
     ) => Promise<Readonly<Record<string, string>>>;
   };
-const { findExecutableOnPath } = require('../agent-shared.cjs') as {
+const { findExecutableOnPath } = require('../command-utils.cjs') as {
   findExecutableOnPath: (command: string) => string | null;
 };
 const { spawnPty } = require('../pty.cjs') as { spawnPty: typeof import('node-pty').spawn };

@@ -2,24 +2,18 @@ import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test, vi } from 'vite-plus/test';
+import { expect, test } from 'vite-plus/test';
 import packageJson from '../../package.json' with { type: 'json' };
 import schema from '../config/codiff-config.schema.json' with { type: 'json' };
 import { createDefaultConfig } from '../config/defaults.ts';
 import { createTemporaryDirectorySync, createTemporaryEnvironment } from './helpers/resources.ts';
 
 const require = createRequire(import.meta.url);
-const {
-  createDefaultConfig: createElectronDefaultConfig,
-  readConfig,
-  watchConfig,
-  writeConfig,
-} = require('../../electron/config.cjs') as {
-  createDefaultConfig: typeof createDefaultConfig;
-  readConfig: () => ReturnType<typeof createDefaultConfig>;
-  watchConfig: (onChange: (config: ReturnType<typeof createDefaultConfig>) => void) => () => void;
-  writeConfig: (config: ReturnType<typeof createDefaultConfig>) => void;
-};
+const { createDefaultConfig: createElectronDefaultConfig, readConfig } =
+  require('../../electron/config.cjs') as {
+    createDefaultConfig: typeof createDefaultConfig;
+    readConfig: () => ReturnType<typeof createDefaultConfig>;
+  };
 
 const readElectronConfig = (raw: unknown) => {
   using home = createTemporaryDirectorySync('codiff-config-home.');
@@ -94,70 +88,11 @@ test('electron config normalizes sidebar position', () => {
   ).toBe('left');
 });
 
-test('old configurations retain automatic reasoning and custom values survive save and reload', async () => {
-  expect(readElectronConfig({}).settings.openAIReasoningEffort).toBe('');
-  expect(
-    readElectronConfig({ settings: { openAIReasoningEffort: 42 } }).settings.openAIReasoningEffort,
-  ).toBe('');
-  using home = createTemporaryDirectorySync('codiff-model-config.');
-  using _environment = createTemporaryEnvironment({ HOME: home.path });
-  const configDirectory = join(home.path, '.codiff');
-  mkdirSync(configDirectory);
-  writeFileSync(
-    join(configDirectory, 'codiff.jsonc'),
-    JSON.stringify({ settings: { openAIModel: 'gpt-6.1-sol', openAIReasoningEffort: ' high ' } }),
-  );
-  const config = readConfig();
-  expect(config.settings).toMatchObject({
-    openAIModel: 'gpt-6.1-sol',
-    openAIReasoningEffort: 'high',
-  });
-  let reloaded: ReturnType<typeof createDefaultConfig> | undefined;
-  const stop = watchConfig((next) => {
-    reloaded = next;
-  });
-  try {
-    writeConfig({ ...config, settings: { ...config.settings, openAIReasoningEffort: 'ultra' } });
-    expect(readConfig().settings).toMatchObject({
-      openAIModel: 'gpt-6.1-sol',
-      openAIReasoningEffort: 'ultra',
-    });
-    await vi.waitFor(
-      () =>
-        expect(reloaded?.settings).toMatchObject({
-          openAIModel: 'gpt-6.1-sol',
-          openAIReasoningEffort: 'ultra',
-        }),
-      { timeout: 5000 },
-    );
-  } finally {
-    stop();
-  }
-});
-
-test('electron config keeps custom walkthrough prompt text only when it is a string', () => {
-  expect(
-    readElectronConfig({
-      settings: {
-        walkthroughPrompt: 'Respond in German with product-review terminology.',
-      },
-    }).settings.walkthroughPrompt,
-  ).toBe('Respond in German with product-review terminology.');
-
-  expect(
-    readElectronConfig({
-      settings: {
-        walkthroughPrompt: ['Respond in German'],
-      },
-    }).settings.walkthroughPrompt,
-  ).toBe('');
-});
-
 test('electron config strips trailing commas without changing strings', () => {
   const config = readElectronConfigText(`{
     // JSONC comments and trailing commas remain supported.
     "settings": {
-      "walkthroughPrompt": "Preserve comma,} and comma,] with an escaped quote: \\"",
+      "reviewCommentsPrefix": "Preserve comma,} and comma,] with an escaped quote: \\"",
       "wordWrap": false,
     },
     "keymap": {
@@ -165,7 +100,7 @@ test('electron config strips trailing commas without changing strings', () => {
     },
   }`);
 
-  expect(config.settings.walkthroughPrompt).toBe(
+  expect(config.settings.reviewCommentsPrefix).toBe(
     'Preserve comma,} and comma,] with an escaped quote: "',
   );
   expect(config.settings.wordWrap).toBe(false);
@@ -183,10 +118,10 @@ test('electron defaults load from packaged app shape', () => {
   expect(packageRequire('./config.cjs').createDefaultConfig()).toEqual(createDefaultConfig());
 });
 
-test('npm package includes runtime config and bundled skills', () => {
+test('npm package includes runtime config without bundled agent integrations', () => {
   expect(packageJson.files).toContain('config');
-  expect(packageJson.files).toContain('codex');
-  expect(packageJson.files).toContain('claude');
-  expect(packageJson.files).toContain('opencode');
-  expect(packageJson.files).toContain('pi');
+  expect(packageJson.files).not.toContain('codex');
+  expect(packageJson.files).not.toContain('claude');
+  expect(packageJson.files).not.toContain('opencode');
+  expect(packageJson.files).not.toContain('pi');
 });

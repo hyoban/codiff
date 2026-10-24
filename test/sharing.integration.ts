@@ -638,10 +638,10 @@ test('streams upload intent updates through the Void live route', async () => {
   }
 });
 
-test('stores immutable plan and walkthrough shares through D1, R2, Fate, and polling', async () => {
+test('stores immutable plan shares through D1, R2, Fate, and polling', async () => {
   const cookie = await signInWithGitHub(ada);
 
-  for (const kind of ['plan', 'walkthrough'] as const) {
+  for (const kind of ['plan'] as const) {
     const { value: intent } = await createIntent(cookie);
     const uploadResponse = await uploadShare(
       intent,
@@ -683,16 +683,7 @@ test('stores immutable plan and walkthrough shares through D1, R2, Fate, and pol
     const object = await env.WALKTHROUGH_BUCKET.get(stored.objectKey);
     expect(object).not.toBeNull();
     const canonicalSnapshot = await object!.json<Record<string, unknown>>();
-    if (kind === 'walkthrough') {
-      expect(canonicalSnapshot).toMatchObject({
-        repository: { root: 'Shared Codiff review' },
-      });
-      expect(canonicalSnapshot).not.toMatchObject({
-        repository: { root: '/private/source/path' },
-      });
-    } else {
-      expect(canonicalSnapshot).toEqual(planSnapshot);
-    }
+    expect(canonicalSnapshot).toEqual(planSnapshot);
 
     const fateResult = await fateOperation({
       args: { slug: upload.slug },
@@ -773,7 +764,7 @@ test('enforces per-kind and combined daily quotas and rolls R2 back on a D1 quot
   await setUsage(owner.id, 0, 50);
   const walkthroughIntent = (await createIntent(cookie)).value;
   const rejectedWalkthrough = await uploadShare(walkthroughIntent, walkthroughSnapshot);
-  expect(rejectedWalkthrough.status).toBe(429);
+  expect(rejectedWalkthrough.status).toBe(400);
   expect(
     await env.DB.prepare('SELECT status FROM UploadIntent WHERE code IN (?, ?) ORDER BY code')
       .bind(planIntent.code, walkthroughIntent.code)
@@ -1071,238 +1062,41 @@ test('enforces comment authentication, message ownership, and share-owner resolu
   });
 });
 
-test('allows only share owners to delete plans and walkthroughs', async () => {
+test('allows only share owners to delete plans', async () => {
   const ownerCookie = await signInWithGitHub(ada);
   const otherCookie = await signInWithGitHub(grace);
   const sharedPlan = await createAndUpload(ownerCookie, 'plan');
-  const sharedWalkthrough = await createAndUpload(ownerCookie, 'walkthrough');
-
-  expect((await queryShare('planBySlug', sharedPlan.slug)).results[0]).toMatchObject({
-    data: { canDelete: false },
-    ok: true,
-  });
-  expect((await queryShare('planBySlug', sharedPlan.slug, otherCookie)).results[0]).toMatchObject({
-    data: { canDelete: false },
-    ok: true,
-  });
+  for (const [cookie, code] of [
+    [undefined, 'UNAUTHORIZED'],
+    [otherCookie, 'FORBIDDEN'],
+  ] as const) {
+    expect(
+      (await mutate('plan.delete', { id: sharedPlan.id }, cookie, ['id'])).results[0],
+    ).toMatchObject({ error: { code }, ok: false });
+  }
   expect((await queryShare('planBySlug', sharedPlan.slug, ownerCookie)).results[0]).toMatchObject({
     data: { canDelete: true },
     ok: true,
   });
-  expect(
-    (await queryShare('walkthroughBySlug', sharedWalkthrough.slug, ownerCookie)).results[0],
-  ).toMatchObject({
-    data: { canDelete: true },
-    ok: true,
-  });
-
-  for (const result of [
-    await mutate('plan.delete', { id: sharedPlan.id }, undefined, ['id']),
-    await mutate('walkthrough.delete', { id: sharedWalkthrough.id }, undefined, ['id']),
-  ]) {
-    expect(result.results[0]).toMatchObject({
-      error: { code: 'UNAUTHORIZED' },
-      ok: false,
-    });
-  }
-  for (const result of [
-    await mutate('plan.delete', { id: sharedPlan.id }, otherCookie, ['id']),
-    await mutate('walkthrough.delete', { id: sharedWalkthrough.id }, otherCookie, ['id']),
-  ]) {
-    expect(result.results[0]).toMatchObject({
-      error: { code: 'FORBIDDEN' },
-      ok: false,
-    });
-  }
-
-  const planRecord = await env.DB.prepare('SELECT objectKey FROM Plan WHERE id = ?')
+  const stored = await env.DB.prepare('SELECT objectKey FROM Plan WHERE id = ?')
     .bind(sharedPlan.id)
     .first<{ objectKey: string }>();
-  const walkthroughRecord = await env.DB.prepare('SELECT objectKey FROM Walkthrough WHERE id = ?')
-    .bind(sharedWalkthrough.id)
-    .first<{ objectKey: string }>();
-  if (!planRecord || !walkthroughRecord) {
-    throw new Error('Expected both shares to exist before deletion.');
-  }
-  expect(await env.WALKTHROUGH_BUCKET.get(planRecord.objectKey)).not.toBeNull();
-  expect(await env.WALKTHROUGH_BUCKET.get(walkthroughRecord.objectKey)).not.toBeNull();
-
+  expect(stored).not.toBeNull();
   expect(
     (await mutate('plan.delete', { id: sharedPlan.id }, ownerCookie, ['id'])).results[0],
   ).toMatchObject({ data: { id: sharedPlan.id }, ok: true });
   expect(
-    (await mutate('walkthrough.delete', { id: sharedWalkthrough.id }, ownerCookie, ['id']))
-      .results[0],
-  ).toMatchObject({ data: { id: sharedWalkthrough.id }, ok: true });
-
-  expect(
     await env.DB.prepare('SELECT id FROM Plan WHERE id = ?').bind(sharedPlan.id).first(),
   ).toBeNull();
-  expect(
-    await env.DB.prepare('SELECT id FROM Walkthrough WHERE id = ?')
-      .bind(sharedWalkthrough.id)
-      .first(),
-  ).toBeNull();
-  expect(
-    await env.DB.prepare(
-      `SELECT COUNT(*) AS count FROM ShareCommentThread
-       WHERE planId = ? OR walkthroughId = ?`,
-    )
-      .bind(sharedPlan.id, sharedWalkthrough.id)
-      .first(),
-  ).toEqual({ count: 0 });
-  expect(await env.WALKTHROUGH_BUCKET.get(planRecord.objectKey)).toBeNull();
-  expect(await env.WALKTHROUGH_BUCKET.get(walkthroughRecord.objectKey)).toBeNull();
+  expect(await env.WALKTHROUGH_BUCKET.get(stored!.objectKey)).toBeNull();
 });
 
-test('imports walkthrough discussions once and indexes valid comment files lazily', async () => {
+test('rejects removed walkthrough uploads and queries', async () => {
   const cookie = await signInWithGitHub(ada);
-  const sharedWalkthrough = await createAndUpload(cookie, 'walkthrough');
-  const storedBefore = await env.DB.prepare(
-    'SELECT commentsImportedAt, filesIndexedAt, objectKey FROM Walkthrough WHERE id = ?',
-  )
-    .bind(sharedWalkthrough.id)
-    .first<{
-      commentsImportedAt: null | number;
-      filesIndexedAt: null | number;
-      objectKey: string;
-    }>();
-  expect(storedBefore).toMatchObject({
-    commentsImportedAt: null,
-    filesIndexedAt: null,
-  });
-  expect(
-    await env.DB.prepare('SELECT COUNT(*) AS count FROM WalkthroughFile WHERE walkthroughId = ?')
-      .bind(sharedWalkthrough.id)
-      .first(),
-  ).toEqual({ count: 0 });
-
-  const query = () =>
-    fateOperation(
-      {
-        args: { slug: sharedWalkthrough.slug },
-        id: 'walkthrough-comments',
-        kind: 'query',
-        name: 'walkthroughBySlug',
-        select: [
-          'commentThreads.filePath',
-          'commentThreads.id',
-          'commentThreads.kind',
-          'commentThreads.lineNumber',
-          'commentThreads.messages.body',
-          'commentThreads.sectionId',
-          'commentThreads.side',
-          'id',
-        ],
-      },
-      { cookie },
-    );
-  const [firstQuery, secondQuery] = await Promise.all([query(), query()]);
-  expect(firstQuery.results[0]?.ok).toBe(true);
-  expect(secondQuery.results[0]?.ok).toBe(true);
-  const importedThreads = firstQuery.results[0]?.data?.commentThreads as
-    | { items: Array<unknown> }
-    | undefined;
-  expect(importedThreads?.items).toHaveLength(3);
-  expect(
-    await env.DB.prepare(
-      `SELECT
-        (SELECT COUNT(*) FROM ShareCommentThread WHERE walkthroughId = ?) AS threads,
-        (SELECT COUNT(*) FROM ShareCommentMessage
-         WHERE threadId IN (SELECT id FROM ShareCommentThread WHERE walkthroughId = ?)) AS messages`,
-    )
-      .bind(sharedWalkthrough.id, sharedWalkthrough.id)
-      .first(),
-  ).toEqual({ messages: 4, threads: 3 });
-
-  const createWalkthroughComment = (target: Record<string, unknown>) =>
-    mutate(
-      'shareComment.createThread',
-      {
-        body: 'Added from codiff.dev.',
-        shareId: sharedWalkthrough.id,
-        shareType: 'walkthrough',
-        target,
-      },
-      cookie,
-      ['id', 'kind'],
-    );
-
-  expect(
-    (
-      await createWalkthroughComment({
-        filePath: 'src/review.ts',
-        kind: 'walkthrough-diff',
-        lineNumber: 1,
-        sectionId: 'src/review.ts:unstaged',
-        side: 'additions',
-      })
-    ).results[0],
-  ).toMatchObject({ data: { kind: 'walkthrough-diff' }, ok: true });
-  const persistedComments = (await query()).results[0]?.data?.commentThreads as
-    | {
-        items: Array<{
-          node: {
-            filePath: string | null;
-            kind: string;
-            lineNumber: number | null;
-            messages: { items: Array<{ node: { body: string } }> };
-            sectionId: string | null;
-            side: string | null;
-          };
-        }>;
-      }
-    | undefined;
-  expect(
-    persistedComments?.items.find(({ node }) =>
-      node.messages.items.some(({ node: message }) => message.body === 'Added from codiff.dev.'),
-    )?.node,
-  ).toMatchObject({
-    filePath: 'src/review.ts',
-    kind: 'walkthrough-diff',
-    lineNumber: 1,
-    sectionId: 'src/review.ts:unstaged',
-    side: 'additions',
-  });
-  expect(
-    await env.DB.prepare('SELECT path FROM WalkthroughFile WHERE walkthroughId = ?')
-      .bind(sharedWalkthrough.id)
-      .all(),
-  ).toMatchObject({ results: [{ path: 'src/review.ts' }] });
-  expect(
-    await env.DB.prepare('SELECT filesIndexedAt FROM Walkthrough WHERE id = ?')
-      .bind(sharedWalkthrough.id)
-      .first(),
-  ).toMatchObject({ filesIndexedAt: expect.any(Number) });
-
-  if (!storedBefore) {
-    throw new Error('Expected walkthrough storage metadata.');
-  }
-  await env.WALKTHROUGH_BUCKET.delete(storedBefore.objectKey);
-  expect(
-    (
-      await createWalkthroughComment({
-        anchor: 'file',
-        filePath: 'src/review.ts',
-        kind: 'walkthrough-diff',
-      })
-    ).results[0],
-  ).toMatchObject({ data: { kind: 'walkthrough-diff' }, ok: true });
-  expect(
-    (
-      await createWalkthroughComment({
-        filePath: 'src/missing.ts',
-        kind: 'walkthrough-diff',
-        lineNumber: 1,
-        side: 'additions',
-      })
-    ).results[0],
-  ).toMatchObject({ error: { code: 'BAD_REQUEST' }, ok: false });
-  expect(
-    await env.DB.prepare('SELECT COUNT(*) AS count FROM WalkthroughFile WHERE walkthroughId = ?')
-      .bind(sharedWalkthrough.id)
-      .first(),
-  ).toEqual({ count: 1 });
+  const { value: intent } = await createIntent(cookie);
+  expect((await uploadShare(intent, walkthroughSnapshot)).status).toBe(400);
+  expect((await queryShare('walkthroughBySlug', 'removed', cookie)).results[0]?.ok).toBe(false);
+  expect((await SELF.fetch(`${origin}/api/walkthroughs/removed/manifest`)).status).toBe(404);
 });
 
 test('serves public statistics and stable errors without storing invalid uploads', async () => {

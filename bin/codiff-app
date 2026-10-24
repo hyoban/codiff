@@ -195,22 +195,13 @@ show_help() {
   printf '  %-38s%s%s%s\n' "update" "$gray" "Update Codiff to the latest release." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Options:${reset}"
-  printf '  %-38s%s%s%s\n' "--agent <codex|claude|opencode|pi>" "$gray" "Override the agent backend for this session." "$reset"
   printf '  %-38s%s%s%s\n' "--branch <ref>" "$gray" "Review the current branch against a target branch." "$reset"
   printf '  %-38s%s%s%s\n' "--commit <ref>" "$gray" "Review a specific commit." "$reset"
-  printf '  %-38s%s%s%s\n' "--codex-session <id>" "$gray" "Attach Codex session metadata to a walkthrough." "$reset"
-  printf '  %-38s%s%s%s\n' "--claude-session <id>" "$gray" "Attach Claude Code session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--completions <bash|fish|zsh>" "$gray" "Print a shell completion script, then exit." "$reset"
   printf '  %-38s%s%s%s\n' "--help, -h" "$gray" "Show this help message and exit." "$reset"
-  printf '  %-38s%s%s%s\n' "--opencode-session <id>" "$gray" "Attach OpenCode session metadata to a walkthrough." "$reset"
-  printf '  %-38s%s%s%s\n' "--pi-session <id>" "$gray" "Attach Pi session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--plan <file>" "$gray" "Edit a Markdown plan and wait until it is handed back." "$reset"
-  printf '  %-38s%s%s%s\n' "--share" "$gray" "Share a walkthrough or a --plan file, then print its URL." "$reset"
+  printf '  %-38s%s%s%s\n' "--share" "$gray" "Share a --plan file, then print its URL." "$reset"
   printf '  %-38s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
-  printf '  %-38s%s%s%s\n' "--walkthrough, -w" "$gray" "Start an LLM walkthrough; use HEAD when there are no local changes." "$reset"
-  printf '  %-38s%s%s%s\n' "--walkthrough-context <file>" "$gray" "Seed a walkthrough with Codex conversation context JSON." "$reset"
-  printf '  %-38s%s%s%s\n' "--walkthrough-file <file>" "$gray" "Open a pre-authored narrative walkthrough JSON file." "$reset"
-  printf '  %-38s%s%s%s\n' "--walkthrough-guide" "$gray" "Print the narrative walkthrough authoring guide and schema, then exit." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Examples:${reset}"
   printf '  %-32s%s%s%s\n' "codiff" "$gray" "Review staged and unstaged changes." "$reset"
@@ -223,10 +214,6 @@ show_help() {
   printf '  %-32s%s%s%s\n' "codiff mr 75" "$gray" "Review GitLab merge request !75." "$reset"
   printf '  %-32s%s%s%s\n' "codiff --plan plan.md" "$gray" "Edit a plan and wait for handoff." "$reset"
   printf '  %-32s%s%s%s\n' "codiff --plan plan.md --share" "$gray" "Share a Markdown plan." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff -w" "$gray" "Walk through local changes, or HEAD when clean." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff -w a1b2c3d" "$gray" "Walkthrough a specific commit." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff --share" "$gray" "Share local changes, or HEAD when clean." "$reset"
-  printf '  %-32s%s%s%s\n' "codiff --share HEAD" "$gray" "Share a walkthrough for a commit." "$reset"
 }
 
 resolve_runtime() {
@@ -261,11 +248,6 @@ for arg in "$@"; do
 done
 
 repository_path=""
-codex_session_id=""
-claude_session_id=""
-opencode_session_id=""
-pi_session_id=""
-agent_backend=""
 branch_ref=""
 commit_ref=""
 pull_request_source=""
@@ -273,23 +255,13 @@ pull_request_branch=""
 pull_request_provider=""
 source_ref=""
 range_ref=""
-walkthrough_context_path=""
-walkthrough_file_path=""
 plan_file_path=""
 plan_result_file_path=""
-expect_codex_session=0
-expect_claude_session=0
-expect_opencode_session=0
-expect_pi_session=0
-expect_agent=0
 expect_branch_ref=0
 expect_commit_ref=0
 expect_pull_request_value=0
-expect_walkthrough_context=0
-expect_walkthrough_file=0
 expect_plan_file=0
 expect_plan_result_file=0
-walkthrough=0
 
 is_commit_ref_arg() {
   ref_arg="$1"
@@ -358,35 +330,10 @@ is_git_repository() {
 }
 
 for arg in "$@"; do
-  if [ "$expect_codex_session" -eq 1 ]; then
-    codex_session_id="$arg"
-    expect_codex_session=0
-    continue
-  fi
 
-  if [ "$expect_claude_session" -eq 1 ]; then
-    claude_session_id="$arg"
-    expect_claude_session=0
-    continue
-  fi
 
-  if [ "$expect_opencode_session" -eq 1 ]; then
-    opencode_session_id="$arg"
-    expect_opencode_session=0
-    continue
-  fi
 
-  if [ "$expect_pi_session" -eq 1 ]; then
-    pi_session_id="$arg"
-    expect_pi_session=0
-    continue
-  fi
 
-  if [ "$expect_agent" -eq 1 ]; then
-    agent_backend="$arg"
-    expect_agent=0
-    continue
-  fi
 
   if [ "$expect_branch_ref" -eq 1 ]; then
     branch_ref="$arg"
@@ -400,17 +347,7 @@ for arg in "$@"; do
     continue
   fi
 
-  if [ "$expect_walkthrough_context" -eq 1 ]; then
-    walkthrough_context_path="$arg"
-    expect_walkthrough_context=0
-    continue
-  fi
 
-  if [ "$expect_walkthrough_file" -eq 1 ]; then
-    walkthrough_file_path="$arg"
-    expect_walkthrough_file=0
-    continue
-  fi
 
   if [ "$expect_plan_file" -eq 1 ]; then
     plan_file_path="$arg"
@@ -454,51 +391,6 @@ for arg in "$@"; do
       print_update_notice
       exit 0
       ;;
-    --walkthrough-guide)
-      # The guide is pure text assembled by the Node entry; run it with the
-      # bundled Electron as Node so no separate node install is required.
-      electron_exec="$(ls "$app_path/Contents/MacOS/" 2>/dev/null | head -n 1)"
-      if [ -n "$electron_exec" ] && [ -f "$script_dir/codiff.js" ]; then
-        ELECTRON_RUN_AS_NODE=1 "$app_path/Contents/MacOS/$electron_exec" \
-          "$script_dir/codiff.js" --walkthrough-guide
-      else
-        cat "$script_dir/walkthrough-guide.md"
-      fi
-      exit 0
-      ;;
-    --walkthrough|-w)
-      walkthrough=1
-      ;;
-    --codex-session)
-      expect_codex_session=1
-      ;;
-    --codex-session=*)
-      codex_session_id="${arg#--codex-session=}"
-      ;;
-    --claude-session)
-      expect_claude_session=1
-      ;;
-    --claude-session=*)
-      claude_session_id="${arg#--claude-session=}"
-      ;;
-    --opencode-session)
-      expect_opencode_session=1
-      ;;
-    --opencode-session=*)
-      opencode_session_id="${arg#--opencode-session=}"
-      ;;
-    --pi-session)
-      expect_pi_session=1
-      ;;
-    --pi-session=*)
-      pi_session_id="${arg#--pi-session=}"
-      ;;
-    --agent)
-      expect_agent=1
-      ;;
-    --agent=*)
-      agent_backend="${arg#--agent=}"
-      ;;
     --branch)
       expect_branch_ref=1
       ;;
@@ -510,18 +402,6 @@ for arg in "$@"; do
       ;;
     --commit=*)
       commit_ref="${arg#--commit=}"
-      ;;
-    --walkthrough-context)
-      expect_walkthrough_context=1
-      ;;
-    --walkthrough-context=*)
-      walkthrough_context_path="${arg#--walkthrough-context=}"
-      ;;
-    --walkthrough-file)
-      expect_walkthrough_file=1
-      ;;
-    --walkthrough-file=*)
-      walkthrough_file_path="${arg#--walkthrough-file=}"
       ;;
     --plan)
       expect_plan_file=1
@@ -542,6 +422,8 @@ for arg in "$@"; do
       plan_result_file_path="${arg#--plan-result-file=}"
       ;;
     -*)
+      printf 'codiff: unknown option: %s\n' "$arg" >&2
+      exit 1
       ;;
     *)
       if [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eiq '^(pr|pull-request)$'; then
@@ -599,19 +481,7 @@ case "$repository_path" in
   *) repository_path="$PWD/$repository_path" ;;
 esac
 
-if [ -n "$walkthrough_context_path" ]; then
-  case "$walkthrough_context_path" in
-    /*) ;;
-    *) walkthrough_context_path="$PWD/$walkthrough_context_path" ;;
-  esac
-fi
 
-if [ -n "$walkthrough_file_path" ]; then
-  case "$walkthrough_file_path" in
-    /*) ;;
-    *) walkthrough_file_path="$PWD/$walkthrough_file_path" ;;
-  esac
-fi
 
 if [ -n "$plan_file_path" ]; then
   case "$plan_file_path" in
@@ -647,36 +517,12 @@ if [ -n "$pull_request_branch" ]; then
 fi
 
 open_codiff() {
-  # Prepend optional flags in reverse of their final order so the resulting
-  # argument list reads: --codex-session --claude-session --opencode-session
-  # --agent --walkthrough-context --walkthrough-file --plan-file
-  # --plan-result-file <trailing>.
+  # Prepend plan handoff options.
   if [ -n "$plan_result_file_path" ]; then
     set -- --plan-result-file "$plan_result_file_path" "$@"
   fi
   if [ -n "$plan_file_path" ]; then
     set -- --plan-file "$plan_file_path" "$@"
-  fi
-  if [ -n "$walkthrough_file_path" ]; then
-    set -- --walkthrough-file "$walkthrough_file_path" "$@"
-  fi
-  if [ -n "$walkthrough_context_path" ]; then
-    set -- --walkthrough-context "$walkthrough_context_path" "$@"
-  fi
-  if [ -n "$agent_backend" ]; then
-    set -- --agent "$agent_backend" "$@"
-  fi
-  if [ -n "$opencode_session_id" ]; then
-    set -- --opencode-session "$opencode_session_id" "$@"
-  fi
-  if [ -n "$claude_session_id" ]; then
-    set -- --claude-session "$claude_session_id" "$@"
-  fi
-  if [ -n "$codex_session_id" ]; then
-    set -- --codex-session "$codex_session_id" "$@"
-  fi
-  if [ -n "$pi_session_id" ]; then
-    set -- --pi-session "$pi_session_id" "$@"
   fi
 
   open -n "$app_path" --args "$@"
@@ -717,28 +563,16 @@ if [ -n "$plan_file_path" ]; then
     fi
     sleep 0.05
   done
-elif [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ] && [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough "$pull_request_provider" "$pull_request_source" "$repository_path"
 elif [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ]; then
   open_codiff "$pull_request_provider" "$pull_request_source" "$repository_path"
-elif [ -n "$pull_request_source" ] && [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough "$pull_request_source" "$repository_path"
 elif [ -n "$pull_request_source" ]; then
   open_codiff "$pull_request_source" "$repository_path"
-elif [ -n "$commit_ref" ] && [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough --commit "$commit_ref" "$repository_path"
 elif [ -n "$commit_ref" ]; then
   open_codiff --commit "$commit_ref" "$repository_path"
-elif [ -n "$branch_ref" ] && [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough --branch "$branch_ref" "$repository_path"
 elif [ -n "$branch_ref" ]; then
   open_codiff --branch "$branch_ref" "$repository_path"
-elif [ -n "$range_ref" ] && [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough "$range_ref" "$repository_path"
 elif [ -n "$range_ref" ]; then
   open_codiff "$range_ref" "$repository_path"
-elif [ "$walkthrough" -eq 1 ]; then
-  open_codiff --walkthrough "$repository_path"
 else
   open_codiff "$repository_path"
 fi

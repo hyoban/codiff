@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { homedir } = require('node:os');
 const { join } = require('node:path');
-const { findExecutableOnPath, isExecutableFile } = require('../agent-shared.cjs');
+const { findExecutableOnPath, isExecutableFile } = require('../command-utils.cjs');
 const { getCommandEnvironment } = require('../login-shell-environment.cjs');
 const {
   getFingerprint,

@@ -106,7 +106,6 @@ test('app commands register the complete command set and delegate dynamic action
     'open-folder',
     'sidebar-tree',
     'sidebar-history',
-    'sidebar-walkthrough',
     'copy-comments',
     'copy-comments-and-close',
     'toggle-viewed',
@@ -178,75 +177,6 @@ const dispatchKey = (type: 'keydown' | 'keyup', key: string, target: EventTarget
   target.dispatchEvent(event);
   return event;
 };
-
-test('app keyboard shortcuts route commands and respect native input and walkthrough guards', async () => {
-  let deferHunkNavigation = true;
-  const navigateHunks = vi.fn();
-  const onFocusFileFilter = vi.fn();
-  const onOpenDiffSearch = vi.fn();
-  const onOpenSelectedFile = vi.fn();
-  const onToggleSidebar = vi.fn();
-  const onToggleWordWrap = vi.fn();
-  let state: AppKeyboardShortcutsState | null = null;
-  const getState = () => {
-    if (!state) {
-      throw new Error('Keyboard shortcuts did not render.');
-    }
-    return state;
-  };
-  await using _view = await renderReact(
-    <AppKeyboardShortcutsHarness
-      onState={(nextState) => (state = nextState)}
-      options={{
-        keymap: keyboardKeymap,
-        navigateHunks,
-        onFocusFileFilter,
-        onOpenDiffSearch,
-        onOpenSelectedFile,
-        onToggleSidebar,
-        onToggleWordWrap,
-        shouldDeferHunkNavigation: () => deferHunkNavigation,
-        sidebarCollapsed: true,
-      }}
-    />,
-  );
-
-  await act(async () => {
-    expect(dispatchKey('keydown', 'c').defaultPrevented).toBe(true);
-  });
-  expect(getState().commandBarVisible).toBe(true);
-  await act(async () => {
-    getState().closeCommandBar();
-    dispatchKey('keydown', 'b');
-    dispatchKey('keydown', 'f');
-    dispatchKey('keydown', 'o');
-    dispatchKey('keydown', 'l');
-    dispatchKey('keydown', 'n');
-  });
-  expect(getState().commandBarVisible).toBe(false);
-  expect(onToggleSidebar).toHaveBeenCalledOnce();
-  expect(onOpenDiffSearch).toHaveBeenCalledOnce();
-  expect(onOpenSelectedFile).toHaveBeenCalledOnce();
-  expect(onFocusFileFilter).toHaveBeenCalledOnce();
-  expect(navigateHunks).not.toHaveBeenCalled();
-  deferHunkNavigation = false;
-  await act(async () => {
-    dispatchKey('keydown', 'n');
-    dispatchKey('keydown', 'p');
-  });
-  expect(navigateHunks.mock.calls).toEqual([[1], [-1]]);
-  const input = document.createElement('input');
-  document.body.append(input);
-  await act(async () => {
-    dispatchKey('keydown', 'z', input);
-  });
-  expect(onToggleWordWrap).not.toHaveBeenCalled();
-  await act(async () => {
-    dispatchKey('keydown', 'z');
-  });
-  expect(onToggleWordWrap).toHaveBeenCalledOnce();
-  input.remove();
-});
 
 test('shortcut help remains visible only while its key chord is held', async () => {
   let state: AppKeyboardShortcutsState | null = null;

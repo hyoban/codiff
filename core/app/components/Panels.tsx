@@ -162,51 +162,13 @@ export function UpdatePill({
   );
 }
 
-export function WalkthroughOutdatedBanner({
-  onDismiss,
-  reason,
-}: {
-  onDismiss: () => void;
-  reason: string | null;
-}) {
-  const isVisible = reason != null;
-
-  return (
-    <div
-      aria-live="polite"
-      className={`walkthrough-outdated-banner${isVisible ? ' visible' : ''}`}
-      role="status"
-    >
-      <span className="walkthrough-outdated-banner-content">
-        <strong>Walkthrough out of date.</strong>
-        <span>{reason ?? ''} Showing history instead.</span>
-      </span>
-      <button
-        aria-label="Dismiss walkthrough banner"
-        className="repository-change-dismiss"
-        onClick={onDismiss}
-        title="Dismiss"
-        type="button"
-      >
-        <X aria-hidden className="diff-search-icon" size={15} weight="bold" />
-      </button>
-    </div>
-  );
-}
-
 export function FirstRunPanel({
-  agentSkillInstalled,
-  agentSkillInstalling,
-  agentSkillLabel,
   installing,
-  onInstallAgentSkill,
+
   onInstallTerminalHelper,
 }: {
-  agentSkillInstalled: boolean;
-  agentSkillInstalling: boolean;
-  agentSkillLabel: string;
   installing: boolean;
-  onInstallAgentSkill: () => void;
+
   onInstallTerminalHelper: () => void;
 }) {
   return (
@@ -224,11 +186,6 @@ export function FirstRunPanel({
         <button disabled={installing} onClick={onInstallTerminalHelper} type="button">
           {installing ? 'Installing...' : 'Install Terminal Helper'}
         </button>
-        {!agentSkillInstalled ? (
-          <button disabled={agentSkillInstalling} onClick={onInstallAgentSkill} type="button">
-            {agentSkillInstalling ? 'Installing...' : `Install ${agentSkillLabel}`}
-          </button>
-        ) : null}
       </div>
     </>
   );
@@ -252,33 +209,6 @@ export function RepositoryLoadErrorPanel({ error }: { error: RepositoryLoadError
     <>
       <strong>Unable to read repository</strong>
       <p>{error.message}</p>
-    </>
-  );
-}
-
-export function AgentUnavailablePanel({
-  agentLabel,
-  onShowFiles,
-  reason,
-  title,
-}: {
-  agentLabel: string;
-  onShowFiles: () => void;
-  reason?: string;
-  title?: string;
-}) {
-  return (
-    <>
-      <strong>{title ?? `${agentLabel} CLI not found`}</strong>
-      <p>
-        {reason ??
-          `Install ${agentLabel} and verify its CLI works in Terminal, then try the walkthrough again.`}
-      </p>
-      <div className="empty-panel-actions">
-        <button onClick={onShowFiles} type="button">
-          Review Files
-        </button>
-      </div>
     </>
   );
 }

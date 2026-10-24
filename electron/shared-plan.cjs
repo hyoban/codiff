@@ -19,24 +19,14 @@ const getPlanTitle = (content, filePath) => {
 
 /**
  * @param {{
- *   agent?: 'claude' | 'codex' | 'opencode' | 'pi';
  *   codiffVersion: string;
  *   content: string;
  *   filePath: string;
  *   review: import('../core/types.ts').PlanReview;
- *   sessionId?: string;
  *   theme: import('../core/types.ts').CodiffTheme;
  * }} options
  */
-const createSharedPlanSnapshot = ({
-  agent,
-  codiffVersion,
-  content,
-  filePath,
-  review,
-  sessionId,
-  theme,
-}) => ({
+const createSharedPlanSnapshot = ({ codiffVersion, content, filePath, review, theme }) => ({
   codiffVersion,
   document: {
     content,
@@ -50,12 +40,7 @@ const createSharedPlanSnapshot = ({
     threads: review.threads,
     version: /** @type {const} */ (1),
   },
-  ...((agent || sessionId) && {
-    source: {
-      ...(agent ? { agent } : {}),
-      ...(sessionId ? { sessionId } : {}),
-    },
-  }),
+
   version: /** @type {const} */ (1),
 });
 

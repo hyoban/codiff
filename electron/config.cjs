@@ -156,12 +156,6 @@ const normalizeDiffStyle = (diffStyle) =>
 /** @param {unknown} position @returns {'left' | 'right'} */
 const normalizeSidebarPosition = (position) => (position === 'right' ? 'right' : 'left');
 
-/** @param {unknown} backend @returns {'codex' | 'claude' | 'opencode' | 'pi'} */
-const normalizeAgentBackend = (backend) =>
-  backend === 'codex' || backend === 'claude' || backend === 'opencode' || backend === 'pi'
-    ? backend
-    : 'codex';
-
 /** @param {unknown} family @returns {string} */
 const normalizeCodeFontFamily = (family) => (typeof family === 'string' ? family.trim() : '');
 
@@ -222,8 +216,6 @@ const mergeConfig = (raw) => {
 
   return {
     keymap: {
-      askAgent:
-        typeof rawKeymap.askAgent === 'string' ? rawKeymap.askAgent : defaults.keymap.askAgent,
       closeSearch:
         typeof rawKeymap.closeSearch === 'string'
           ? rawKeymap.closeSearch
@@ -280,15 +272,11 @@ const mergeConfig = (raw) => {
           : defaults.keymap.toggleWordWrap,
     },
     settings: {
-      agentBackend: normalizeAgentBackend(rawSettings.agentBackend),
       checkForUpdates:
         typeof rawSettings.checkForUpdates === 'boolean'
           ? rawSettings.checkForUpdates
           : defaults.settings.checkForUpdates,
-      claudeModel:
-        typeof rawSettings.claudeModel === 'string'
-          ? rawSettings.claudeModel
-          : defaults.settings.claudeModel,
+
       codeFontFamily: normalizeCodeFontFamily(rawSettings.codeFontFamily),
       codeFontSize: normalizeCodeFontSize(rawSettings.codeFontSize),
       copyCommentsOnClose:
@@ -305,20 +293,7 @@ const mergeConfig = (raw) => {
           ? rawSettings.expandUnchanged
           : defaults.settings.expandUnchanged,
       lastRepositoryPath: normalizeLastRepositoryPath(rawSettings.lastRepositoryPath),
-      openAIModel:
-        typeof rawSettings.openAIModel === 'string'
-          ? rawSettings.openAIModel
-          : defaults.settings.openAIModel,
-      openAIReasoningEffort:
-        typeof rawSettings.openAIReasoningEffort === 'string'
-          ? rawSettings.openAIReasoningEffort.trim()
-          : defaults.settings.openAIReasoningEffort,
-      opencodeModel:
-        typeof rawSettings.opencodeModel === 'string'
-          ? rawSettings.opencodeModel
-          : defaults.settings.opencodeModel,
-      piModel:
-        typeof rawSettings.piModel === 'string' ? rawSettings.piModel : defaults.settings.piModel,
+
       renderMarkdownAs: rawSettings.renderMarkdownAs === 'source' ? 'source' : 'preview',
       reviewCommentsPrefix:
         typeof rawSettings.reviewCommentsPrefix === 'string'
@@ -334,10 +309,7 @@ const mergeConfig = (raw) => {
           ? rawSettings.showWhitespace
           : defaults.settings.showWhitespace,
       theme: normalizeTheme(rawSettings.theme),
-      walkthroughPrompt:
-        typeof rawSettings.walkthroughPrompt === 'string'
-          ? rawSettings.walkthroughPrompt
-          : defaults.settings.walkthroughPrompt,
+
       wordWrap:
         typeof rawSettings.wordWrap === 'boolean'
           ? rawSettings.wordWrap
@@ -402,9 +374,8 @@ const initConfig = () => {
 /**
  * Migrate from the old preferences.json (in Electron's userData) to the new config file.
  * @param {string} userDataPath - Electron's app.getPath('userData')
- * @param {(model: string) => string} normalizeOpenAIModel
  */
-const migrateFromPreferences = (userDataPath, normalizeOpenAIModel) => {
+const migrateFromPreferences = (userDataPath) => {
   const oldPath = join(userDataPath, 'preferences.json');
 
   if (!existsSync(oldPath)) {
@@ -429,7 +400,7 @@ const migrateFromPreferences = (userDataPath, normalizeOpenAIModel) => {
       settings: {
         ...oldPrefs,
         lastRepositoryPath: normalizeLastRepositoryPath(oldPrefs?.lastRepositoryPath),
-        openAIModel: normalizeOpenAIModel(oldPrefs?.openAIModel ?? defaults.settings.openAIModel),
+
         theme: normalizeTheme(oldPrefs?.theme),
       },
     });

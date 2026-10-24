@@ -44,14 +44,14 @@
       "@nkzw/codiff-source": "./App.css",
       "default": "./dist/style.css"
     },
-    "./walkthrough": {
-      "types": "./dist/lib/narrative-walkthrough-diff.d.ts",
-      "@nkzw/codiff-source": "./lib/narrative-walkthrough-diff.js",
-      "default": "./dist/lib/narrative-walkthrough-diff.mjs"
+    "./diff-hunks": {
+      "types": "./dist/lib/diff-hunks.d.ts",
+      "@nkzw/codiff-source": "./lib/diff-hunks.js",
+      "default": "./dist/lib/diff-hunks.mjs"
     }
   },
   "scripts": {
-    "build": "rm -rf dist && vp pack -d dist --target=node24 index.ts react.ts share.ts lib/narrative-walkthrough-diff.js App.css && vp exec tsc -p tsconfig.build.json"
+    "build": "rm -rf dist && vp pack -d dist --target=node24 index.ts react.ts share.ts lib/diff-hunks.js App.css && vp exec tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@nkzw/mdx-editor": "^1.0.3",

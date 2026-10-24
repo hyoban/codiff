@@ -1,11 +1,9 @@
 export type CodiffDiffStyle = 'split' | 'unified';
 export type CodiffTheme = 'system' | 'light' | 'dark';
-export type CodiffAgentBackend = 'codex' | 'claude' | 'opencode' | 'pi';
 
 export type CodiffSettings = {
-  agentBackend: CodiffAgentBackend;
   checkForUpdates: boolean;
-  claudeModel: string;
+
   codeFontFamily: string;
   codeFontSize: number;
   copyCommentsOnClose: boolean;
@@ -13,17 +11,14 @@ export type CodiffSettings = {
   editorCommand: string;
   expandUnchanged: boolean;
   lastRepositoryPath: string;
-  openAIModel: string;
-  openAIReasoningEffort: string;
-  opencodeModel: string;
-  piModel: string;
+
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
   showOutdated: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
   theme: CodiffTheme;
-  walkthroughPrompt: string;
+
   wordWrap: boolean;
 };
 
@@ -33,7 +28,6 @@ export type KeyCombo = string;
 export type KeyComboBinding = KeyCombo | ReadonlyArray<KeyCombo>;
 
 export type CodiffKeymap = {
-  askAgent: KeyCombo;
   closeSearch: KeyCombo;
   commandBar: KeyCombo;
   diffSearch: KeyCombo;

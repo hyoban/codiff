@@ -841,24 +841,6 @@ test('returning to a source restores its unsaved draft', async () => {
   expect(window.codiff.saveRepositoryFile).not.toHaveBeenCalled();
 });
 
-test('tree and walkthrough surface remounts retain the draft in the App store', async () => {
-  const store = createCodeEditingStore();
-  await using view = await renderReact(<Harness store={store} />);
-  await click(view.container, 'Edit');
-  await edit();
-  await view.rerender(<div />);
-  await view.rerender(<Harness store={store} />);
-  await act(async () => {
-    handle?.getInstance()?.render(true);
-  });
-  await waitFor(() => expect(handle?.getEditor(item.id)?.getText()).toBe('updated\n'));
-  await click(view.container, 'Done');
-  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-  expect(window.codiff.saveRepositoryFile).toHaveBeenCalledWith(
-    expect.objectContaining({ content: 'updated\n' }),
-  );
-});
-
 test('Revert after a source switch restores the original diff and disk contents', async () => {
   await using view = await renderReact(<Harness />);
   await click(view.container, 'Edit');

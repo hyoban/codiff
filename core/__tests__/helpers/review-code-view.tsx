@@ -184,8 +184,7 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
   return (
     <ReviewCodeView
       activeSearchMatch={null}
-      agentId="codex"
-      agentLabel="Codex"
+
       collapsed={new Set()}
       comments={[]}
       commitMetadata={null}
@@ -199,7 +198,7 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
       itemVersionByKey={{}}
       keymap={defaultKeymap}
       loadingSectionIds={new Set()}
-      onAskCodex={() => {}}
+
       onCreateComment={() => {}}
       onDeleteComment={() => {}}
       onLoadSection={() => {}}
@@ -217,7 +216,6 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
       source={source}
       supportsReviewCommentActions={false}
       viewed={{}}
-      walkthroughNotes={new Map()}
       wordWrap={false}
       {...overrides}
     />

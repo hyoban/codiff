@@ -1,5 +1,4 @@
 import { parsePlanShareUpload } from '@nkzw/codiff-core/share';
-import { z } from 'zod';
 import {
   and,
   createPrimaryDb,
@@ -10,7 +9,7 @@ import {
   withDatabase,
   type D1Binding,
 } from './db.ts';
-import { plan, shareDailyUsage, uploadIntent, user, walkthrough, type UserRow } from './schema.ts';
+import { plan, shareDailyUsage, uploadIntent, user, type UserRow } from './schema.ts';
 import {
   createUploadIntentSecret,
   hashUploadIntentSecret,
@@ -62,122 +61,12 @@ export type ShareUser = {
   username: null | string;
 };
 
-const boundedString = (maximum: number) => z.string().max(maximum);
-const nonEmptyString = (maximum: number) => z.string().min(1).max(maximum);
-const reviewAuthorSchema = z
-  .object({
-    avatarUrl: boundedString(2048).optional(),
-    login: nonEmptyString(200),
-    name: nonEmptyString(200).optional(),
-  })
-  .passthrough();
-const reviewCommentSchema = z
-  .object({
-    anchor: z.enum(['file', 'line']).optional(),
-    author: reviewAuthorSchema,
-    body: boundedString(128 * 1024),
-    filePath: nonEmptyString(4096),
-    id: nonEmptyString(256),
-    isThreadResolved: z.boolean().optional(),
-    lineNumber: z.number().int().positive().optional(),
-    sectionId: nonEmptyString(4096).optional(),
-    side: z.enum(['additions', 'deletions']).optional(),
-    startLineNumber: z.number().int().positive().optional(),
-    startSide: z.enum(['additions', 'deletions']).optional(),
-    submittedAt: boundedString(64).optional(),
-    threadId: nonEmptyString(256).optional(),
-  })
-  .passthrough()
-  .refine(
-    (comment) =>
-      comment.anchor === 'file' ||
-      (comment.lineNumber != null &&
-        comment.side != null &&
-        (comment.startLineNumber == null || comment.startSide != null)),
-    'Invalid walkthrough review comment.',
-  );
-const generalCommentSchema = z
-  .object({
-    author: reviewAuthorSchema,
-    body: boundedString(128 * 1024),
-    id: nonEmptyString(256),
-    submittedAt: boundedString(64).optional(),
-  })
-  .passthrough();
-const generalCommentThreadSchema = z
-  .object({
-    comments: z.array(generalCommentSchema).max(1000),
-    id: nonEmptyString(256),
-    isResolved: z.boolean().optional(),
-  })
-  .passthrough();
-const walkthroughFileSchema = z
-  .object({
-    path: nonEmptyString(4096),
-  })
-  .passthrough();
-const walkthroughSourceSchema = z
-  .object({
-    host: boundedString(512).optional(),
-    number: z.number().int().positive().optional(),
-    projectPath: boundedString(4096).optional(),
-    title: boundedString(300).optional(),
-    type: nonEmptyString(64),
-    url: boundedString(4096).optional(),
-  })
-  .passthrough();
-const walkthroughManifestSchema = z
-  .object({
-    branch: boundedString(1024).optional(),
-    codiffVersion: nonEmptyString(100),
-    exportedAt: boundedString(64),
-    files: z.array(walkthroughFileSchema).max(100_000),
-    kind: z.literal('codiff-walkthrough-share'),
-    repository: z
-      .object({
-        generalComments: z.array(generalCommentThreadSchema).max(1000).optional(),
-        source: walkthroughSourceSchema.optional(),
-        title: boundedString(300).optional(),
-      })
-      .passthrough(),
-    reviewComments: z.array(reviewCommentSchema).max(10_000).optional(),
-    version: z.literal(1),
-    walkthrough: z
-      .object({
-        summary: boundedString(128 * 1024).optional(),
-        title: nonEmptyString(300),
-      })
-      .passthrough(),
-  })
-  .passthrough();
-const uploaderSchema = z
-  .object({
-    email: boundedString(320).optional(),
-    name: boundedString(200).optional(),
-  })
-  .passthrough();
-const walkthroughUploadSchema = z
-  .object({
-    snapshot: walkthroughManifestSchema,
-    uploader: uploaderSchema.optional(),
-  })
-  .passthrough();
-
-type WalkthroughManifest = z.infer<typeof walkthroughManifestSchema>;
-
-type ParsedUpload =
-  | {
-      kind: 'plan';
-      sharedByEmail: null | string;
-      sharedByName: null | string;
-      snapshot: ReturnType<typeof parsePlanShareUpload>['snapshot'];
-    }
-  | {
-      kind: 'walkthrough';
-      sharedByEmail: null | string;
-      sharedByName: null | string;
-      snapshot: WalkthroughManifest;
-    };
+type ParsedUpload = {
+  kind: 'plan';
+  sharedByEmail: string | null;
+  sharedByName: string | null;
+  snapshot: ReturnType<typeof parsePlanShareUpload>['snapshot'];
+};
 
 const json = (value: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(value), {
@@ -327,43 +216,12 @@ const cleanTitleValue = (value: unknown) =>
 const cleanIdentityValue = (value: unknown, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) || null : null;
 
-const sanitizeWalkthrough = (snapshot: WalkthroughManifest) => {
-  const repository = snapshot.repository;
-  const source = repository.source;
-  const commitTitle =
-    source?.type === 'commit'
-      ? (cleanTitleValue(repository.title) ?? cleanTitleValue(snapshot.walkthrough.title))
-      : null;
-  const sanitizedRepository = {
-    ...repository,
-    root: commitTitle ?? 'Shared Codiff review',
-    ...(commitTitle ? { title: commitTitle } : {}),
-  };
-  if (!commitTitle) {
-    delete sanitizedRepository.title;
-  }
-  return { ...snapshot, repository: sanitizedRepository };
-};
-
 export const parseShareUpload = (body: string): ParsedUpload => {
   const payload: unknown = JSON.parse(body);
   const record = isRecord(payload) ? payload : null;
   const snapshotValue = record?.snapshot ?? payload;
   if (!isRecord(snapshotValue) || snapshotValue.version !== 1) {
     throw new Error('unsupported-manifest');
-  }
-
-  if (snapshotValue.kind === 'codiff-walkthrough-share') {
-    const envelope = walkthroughUploadSchema.safeParse(payload);
-    const parsed = envelope.success
-      ? envelope.data
-      : { snapshot: walkthroughManifestSchema.parse(payload) };
-    return {
-      kind: 'walkthrough',
-      sharedByEmail: cleanIdentityValue(parsed.uploader?.email, 320),
-      sharedByName: cleanIdentityValue(parsed.uploader?.name, 200),
-      snapshot: sanitizeWalkthrough(parsed.snapshot),
-    };
   }
 
   if (snapshotValue.kind !== 'codiff-plan-share') {
@@ -405,26 +263,6 @@ export const parseGitPullRequestUrl = (value: string | undefined) => {
     return null;
   }
   return null;
-};
-
-export const getRepositoryMetadata = (source: WalkthroughManifest['repository']['source']) => {
-  if (!source || source.type !== 'pull-request') {
-    return null;
-  }
-  const parsed = parseGitPullRequestUrl(source.url);
-  const projectPath = source.projectPath || parsed?.projectPath;
-  const host = source.host || parsed?.host;
-  if (!projectPath || !host) {
-    return null;
-  }
-  const segments = projectPath.split('/');
-  return {
-    host,
-    name: segments.at(-1) ?? projectPath,
-    number: source.number ?? parsed?.number ?? null,
-    owner: segments.slice(0, -1).join('/') || null,
-    url: `https://${host}/${projectPath}`,
-  };
 };
 
 const utcDateKey = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -592,7 +430,7 @@ const uploadShare = async (request: Request, env: SharingEnv, options: SharingAp
   const canonical = JSON.stringify(upload.snapshot);
   const digest = await sha256(canonical);
   const slug = randomToken(18);
-  const objectKey = `${upload.kind === 'plan' ? 'plans' : 'walkthroughs'}/${slug}/manifest.json`;
+  const objectKey = `plans/${slug}/manifest.json`;
   const shareUser = await getShareUserById(intent.sharedByUserId);
   if (!shareUser) {
     return unauthorized();
@@ -613,76 +451,31 @@ const uploadShare = async (request: Request, env: SharingEnv, options: SharingAp
       httpMetadata: { contentType: 'application/json; charset=utf-8' },
     });
 
-    if (upload.kind === 'walkthrough') {
-      const source = upload.snapshot.repository.source;
-      const repository = getRepositoryMetadata(source);
-      const commitTitle =
-        source?.type === 'commit' ? cleanTitleValue(upload.snapshot.repository.title) : null;
-      const walkthroughId = crypto.randomUUID();
-      await db.batch([
-        db.insert(walkthrough).values({
-          branch: upload.snapshot.branch ?? null,
-          byteSize: textEncoder.encode(canonical).byteLength,
-          codiffVersion: upload.snapshot.codiffVersion,
-          description: upload.snapshot.walkthrough.summary ?? null,
-          id: walkthroughId,
-          objectKey,
-          pullRequestNumber: repository?.number ?? source?.number ?? null,
-          pullRequestTitle: source?.title ?? null,
-          pullRequestUrl: source?.type === 'pull-request' ? (source.url ?? null) : null,
-          repositoryHost: repository?.host ?? null,
-          repositoryName: repository?.name ?? null,
-          repositoryOwner: repository?.owner ?? null,
-          repositoryUrl: repository?.url ?? null,
-          schemaVersion: upload.snapshot.version,
-          sha256: digest,
-          sharedByEmail: null,
-          sharedByName: null,
-          sharedByUserId: shareUser.id,
-          slug,
-          sourceType: source?.type ?? 'unknown',
-          title: commitTitle ?? upload.snapshot.walkthrough.title,
+    await db.batch([
+      db.insert(plan).values({
+        byteSize: textEncoder.encode(canonical).byteLength,
+        codiffVersion: upload.snapshot.codiffVersion,
+        objectKey,
+        schemaVersion: upload.snapshot.version,
+        sha256: digest,
+        sharedByEmail: null,
+        sharedByName: null,
+        sharedByUserId: shareUser.id,
+        slug,
+        sourceFileName: cleanTitleValue(upload.snapshot.document.name) ?? 'plan.md',
+        title: cleanTitleValue(upload.snapshot.document.title) ?? 'Codiff Plan',
+        updatedAt: now,
+      }),
+      db
+        .update(uploadIntent)
+        .set({
+          shareKind: upload.kind,
+          status: 'uploaded',
           updatedAt: now,
-        }),
-        db
-          .update(uploadIntent)
-          .set({
-            shareKind: upload.kind,
-            status: 'uploaded',
-            updatedAt: now,
-            walkthroughSlug: slug,
-          })
-          .where(and(eq(uploadIntent.id, intent.id), eq(uploadIntent.status, 'uploading'))),
-      ]);
-    } else {
-      await db.batch([
-        db.insert(plan).values({
-          agent: cleanIdentityValue(upload.snapshot.source?.agent, 40),
-          byteSize: textEncoder.encode(canonical).byteLength,
-          codiffVersion: upload.snapshot.codiffVersion,
-          objectKey,
-          schemaVersion: upload.snapshot.version,
-          sessionId: cleanIdentityValue(upload.snapshot.source?.sessionId, 200),
-          sha256: digest,
-          sharedByEmail: null,
-          sharedByName: null,
-          sharedByUserId: shareUser.id,
-          slug,
-          sourceFileName: cleanTitleValue(upload.snapshot.document.name) ?? 'plan.md',
-          title: cleanTitleValue(upload.snapshot.document.title) ?? 'Codiff Plan',
-          updatedAt: now,
-        }),
-        db
-          .update(uploadIntent)
-          .set({
-            shareKind: upload.kind,
-            status: 'uploaded',
-            updatedAt: now,
-            walkthroughSlug: slug,
-          })
-          .where(and(eq(uploadIntent.id, intent.id), eq(uploadIntent.status, 'uploading'))),
-      ]);
-    }
+          walkthroughSlug: slug,
+        })
+        .where(and(eq(uploadIntent.id, intent.id), eq(uploadIntent.status, 'uploading'))),
+    ]);
   } catch (error) {
     try {
       await env.WALKTHROUGH_BUCKET.delete(objectKey);
@@ -715,19 +508,12 @@ const uploadShare = async (request: Request, env: SharingEnv, options: SharingAp
   });
 };
 
-const getManifest = async (env: SharingEnv, kind: 'plan' | 'walkthrough', slug: string) => {
-  const [record] =
-    kind === 'plan'
-      ? await db
-          .select({ objectKey: plan.objectKey })
-          .from(plan)
-          .where(eq(plan.slug, slug))
-          .limit(1)
-      : await db
-          .select({ objectKey: walkthrough.objectKey })
-          .from(walkthrough)
-          .where(eq(walkthrough.slug, slug))
-          .limit(1);
+const getManifest = async (env: SharingEnv, slug: string) => {
+  const [record] = await db
+    .select({ objectKey: plan.objectKey })
+    .from(plan)
+    .where(eq(plan.slug, slug))
+    .limit(1);
   if (!record) {
     return notFound();
   }
@@ -748,7 +534,6 @@ const handleSharingApi = async (request: Request, env: SharingEnv, options: Shar
   const url = new URL(request.url);
   const uploadIntentMatch = /^\/api\/upload-intents\/([^/]+)$/.exec(url.pathname);
   const planManifestMatch = /^\/api\/plans\/([^/]+)\/manifest$/.exec(url.pathname);
-  const walkthroughManifestMatch = /^\/api\/walkthroughs\/([^/]+)\/manifest$/.exec(url.pathname);
 
   if (request.method === 'POST' && url.pathname === '/api/upload-intents') {
     return createUploadIntent(request, env, options);
@@ -760,11 +545,9 @@ const handleSharingApi = async (request: Request, env: SharingEnv, options: Shar
     return uploadShare(request, env, options);
   }
   if (request.method === 'GET' && planManifestMatch) {
-    return getManifest(env, 'plan', planManifestMatch[1]);
+    return getManifest(env, planManifestMatch[1]);
   }
-  if (request.method === 'GET' && walkthroughManifestMatch) {
-    return getManifest(env, 'walkthrough', walkthroughManifestMatch[1]);
-  }
+
   return notFound();
 };
 

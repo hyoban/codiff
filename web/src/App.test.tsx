@@ -34,11 +34,6 @@ vi.mock('./sharing/PlanPage.tsx', () => ({
 vi.mock('./sharing/StatsPage.tsx', () => ({
   default: () => <main className="codiff-web-stats">Stats</main>,
 }));
-vi.mock('./sharing/WalkthroughPage.tsx', () => ({
-  default: () => {
-    throw suspendedPage;
-  },
-}));
 
 import App from './App.tsx';
 
@@ -74,7 +69,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-test.each(['/p/shared-plan', '/w/shared-walkthrough', '/connect/share-code'])(
+test.each(['/p/shared-plan', '/connect/share-code'])(
   'uses the shared Thinking state while loading %s',
   async (path) => {
     router.path = path;
@@ -106,10 +101,10 @@ test('shows the aligned public guide and starts GitHub sign-in from the header',
   await act(async () => root.render(<App />));
 
   expect(container.textContent).toContain('Effective code reviews locally and on the web');
-  expect(container.textContent).toContain('$codiff plan');
-  expect(container.textContent).toContain('$codiff share');
-  expect(container.textContent).toContain('$codiff share pr 131');
-  expect(container.textContent).toContain('codiff --share pr 232');
+  expect(container.textContent).toContain('codiff --plan plan.md --share');
+  expect(container.textContent).toContain('codiff main');
+  expect(container.textContent).not.toContain('walkthrough');
+  expect(container.textContent).not.toContain('Install Skill');
   expect(container.textContent).not.toContain('codiff mr');
   expect(container.textContent).not.toContain('$codiff share mr');
   expect(container.querySelectorAll('button')).toHaveLength(2);

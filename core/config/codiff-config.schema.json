@@ -14,21 +14,10 @@
       "description": "Application settings.",
       "additionalProperties": false,
       "properties": {
-        "agentBackend": {
-          "type": "string",
-          "enum": ["codex", "claude", "opencode", "pi"],
-          "default": "codex",
-          "description": "Which agent CLI powers review assistance and walkthroughs. 'codex' uses the OpenAI Codex CLI; 'claude' uses the Claude Code CLI; 'opencode' uses the OpenCode CLI; 'pi' uses the Pi CLI."
-        },
         "checkForUpdates": {
           "type": "boolean",
           "default": true,
           "description": "Check GitHub Releases once a day for a newer Codiff version and show an update notification. Set to false if updates are centrally managed."
-        },
-        "claudeModel": {
-          "type": "string",
-          "default": "sonnet",
-          "description": "The Claude Code model alias ('opus', 'sonnet', or 'haiku') to use for review assistance and walkthroughs when agentBackend is 'claude'. The Claude Code CLI resolves each alias to its latest model."
         },
         "codeFontFamily": {
           "type": "string",
@@ -68,27 +57,6 @@
           "default": "",
           "description": "The last repository opened by Codiff when no path was explicitly provided."
         },
-        "openAIModel": {
-          "type": "string",
-          "default": "gpt-5.6-terra",
-          "description": "The OpenAI model to use for review assistance and walkthroughs."
-        },
-        "openAIReasoningEffort": {
-          "type": "string",
-          "default": "",
-          "examples": ["high", "xhigh", "max", "ultra"],
-          "description": "Codex reasoning effort for review assistance and walkthroughs. Supported values depend on the selected model and installed Codex CLI. Leave empty to preserve Codiff's existing defaults for its predefined models and inherit Codex settings for other models."
-        },
-        "opencodeModel": {
-          "type": "string",
-          "default": "opencode-default",
-          "description": "The OpenCode model to use for review assistance, walkthroughs, and the managed /codiff command when agentBackend is 'opencode'. Use 'opencode-default' to preserve OpenCode's configured default, or a provider-qualified model id such as 'anthropic/claude-sonnet-4-6'."
-        },
-        "piModel": {
-          "type": "string",
-          "default": "pi-default",
-          "description": "The Pi model to use for review assistance and walkthroughs when agentBackend is 'pi'."
-        },
         "renderMarkdownAs": {
           "type": "string",
           "enum": ["preview", "source"],
@@ -121,11 +89,6 @@
           "enum": ["system", "light", "dark"],
           "default": "system",
           "description": "Application color theme. 'system' follows OS preference."
-        },
-        "walkthroughPrompt": {
-          "type": "string",
-          "default": "",
-          "description": "Additional instructions appended to generated walkthrough prompts. Use this to request a language, tone, or level of detail while Codiff keeps its walkthrough guide, hunk ids, review-order constraints, and schema."
         },
         "wordWrap": {
           "type": "boolean",
@@ -165,12 +128,32 @@
           "description": "Focus the file filter search input in the sidebar."
         },
         "nextHunk": {
-          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }],
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
           "default": ["Ctrl+ArrowDown", "j"],
           "description": "Jump to the next hunk or review comment. Accepts a single combo or a list of aliases."
         },
         "prevHunk": {
-          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }],
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
           "default": ["Ctrl+ArrowUp", "k"],
           "description": "Jump to the previous hunk or review comment. Accepts a single combo or a list of aliases."
         },
@@ -203,11 +186,6 @@
           "type": "string",
           "default": "Mod+Enter",
           "description": "Add the review comment being written, submitting it remotely when the review source supports it."
-        },
-        "askAgent": {
-          "type": "string",
-          "default": "Mod+Alt+Enter",
-          "description": "Ask the configured agent about the review comment being written."
         },
         "discardComment": {
           "type": "string",

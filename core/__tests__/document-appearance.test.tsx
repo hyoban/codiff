@@ -74,22 +74,3 @@ test('document appearance manages theme and code font properties with cleanup', 
   expect(root.style.getPropertyValue('--font-diff-size')).toBe('');
   expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('');
 });
-
-test('document appearance can preserve shared walkthrough font properties', async () => {
-  const root = document.documentElement;
-  root.style.setProperty('--font-diff-mono', 'existing');
-  {
-    await using _view = await renderReact(
-      <DocumentAppearanceHarness codeFontFamily="" codeFontSize={13} theme="system" />,
-    );
-
-    expect(root.hasAttribute('data-theme')).toBe(false);
-    expect(root.style.getPropertyValue('--font-diff-mono')).toBe('existing');
-    expect(root.style.getPropertyValue('--font-diff-size')).toBe('13px');
-    expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('20px');
-  }
-
-  expect(root.style.getPropertyValue('--font-diff-mono')).toBe('existing');
-  expect(root.style.getPropertyValue('--font-diff-size')).toBe('13px');
-  expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('20px');
-});

@@ -56,7 +56,7 @@ export default defineConfig({
         env: {
           node: true,
         },
-        files: ['core/lib/narrative-walkthrough-diff.cjs'],
+        files: ['core/lib/diff-hunks.cjs'],
       },
     ],
   },

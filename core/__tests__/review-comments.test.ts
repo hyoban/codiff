@@ -310,15 +310,6 @@ test('serializes file-level thread replies without inventing line metadata', () 
   });
 });
 
-test('serializes section identity only for shared walkthrough comments', () => {
-  const comment = createReviewComment({ body: 'Persist this comment.' });
-
-  expect(toPullRequestReviewComment(comment)).not.toHaveProperty('sectionId');
-  expect(toPullRequestReviewComment(comment, { includeSectionId: true })).toMatchObject({
-    sectionId: 'src/a.ts:pull-request:1',
-  });
-});
-
 test('keeps a submitted shared comment visible until the matching snapshot comment arrives', () => {
   const draft = createReviewComment({
     id: 'draft-comment',

@@ -133,25 +133,11 @@ test('completes paths for flags documented as taking a file', () => {
 });
 
 test('completes the documented choices for flags that list them', () => {
-  expect(generateCompletionScript('fish')).toContain("-l agent -x -a 'claude codex opencode pi'");
-});
-
-test('completes nothing for flags whose value is opaque', () => {
-  expect(generateCompletionScript('fish')).toContain(
-    "-l claude-session -x -d 'Attach Claude Code session metadata to a walkthrough.'",
-  );
+  expect(generateCompletionScript('fish')).toContain("-l completions -x -a 'bash fish zsh'");
 });
 
 test.for(completionShells)('keeps hidden flags out of the %s script', (shell) => {
   expect(generateCompletionScript(shell)).not.toContain(flagToken(shell, 'public'));
-});
-
-test.for(completionShells)('completes the agent backends in %s', (shell) => {
-  const script = generateCompletionScript(shell);
-
-  for (const backend of ['claude', 'codex', 'opencode', 'pi']) {
-    expect(script).toContain(backend);
-  }
 });
 
 test.for(completionShells)('completes git refs for %s', (shell) => {
@@ -215,12 +201,12 @@ test('leaves the argument after an equals-form source flag to path completion in
   expect(candidates).toEqual([]);
 });
 
-// Bash splits `--agent=codex` on the `=` in COMP_WORDBREAKS, so the flag is two
+// Bash splits `--completions=bash` on the `=` in COMP_WORDBREAKS, so the flag is two
 // words back.
 test('completes flag values written with an equals sign in bash', async () => {
-  const { candidates } = await completeWithBash(['codiff', '--agent', '=', 'cod']);
+  const { candidates } = await completeWithBash(['codiff', '--completions', '=', 'bas']);
 
-  expect(candidates).toEqual(['codex']);
+  expect(candidates).toEqual(['bash']);
 });
 
 test('matches refs against a prefix the shell has already escaped in bash', async () => {
@@ -257,9 +243,9 @@ test.skipIf(!isInstalled('zsh'))('generates a syntactically valid zsh script', a
 });
 
 test.skipIf(!isInstalled('fish'))('completes flag values in fish', async () => {
-  const { candidates } = await completeWithFish('codiff --agent ');
+  const { candidates } = await completeWithFish('codiff --completions ');
 
-  expect(candidates).toEqual(['claude', 'codex', 'opencode', 'pi']);
+  expect(candidates).toEqual(['bash', 'fish', 'zsh']);
 });
 
 test.skipIf(!isInstalled('fish'))('completes refs without running them in fish', async () => {

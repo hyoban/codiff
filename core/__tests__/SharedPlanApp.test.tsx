@@ -136,10 +136,7 @@ test('shared plans render Markdown and comments read-only', async () => {
       ],
       version: 1,
     },
-    source: {
-      agent: 'codex',
-      sessionId: 'thread-id',
-    },
+
     version: 1,
   } satisfies SharedPlanSnapshot;
 

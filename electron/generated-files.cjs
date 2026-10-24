@@ -4,7 +4,7 @@ const { mkdtemp, rm } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { gitBufferWithInput } = require('./git-state/common.cjs');
-const { isGeneratedWalkthroughPath } = require('../core/lib/narrative-walkthrough-diff.cjs');
+const { isGeneratedPath } = require('../core/lib/diff-hunks.cjs');
 
 const GENERATED_ATTRIBUTES = ['linguist-generated', 'gitlab-generated'];
 
@@ -125,7 +125,7 @@ const applyGeneratedAttributeStates = (state, generatedAttributeStates) => ({
     if (file.generated != null) {
       return file;
     }
-    return isGeneratedWalkthroughPath(file.path) ? { ...file, generated: true } : file;
+    return isGeneratedPath(file.path) ? { ...file, generated: true } : file;
   }),
 });
 

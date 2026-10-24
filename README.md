@@ -8,7 +8,6 @@ Codiff is a beautiful, minimal, local diff viewer for reviewing Git changes and 
 ## Why Codiff
 
 - **Fast Local Reviews:** Review and commit changes in any Git repository.
-- **LLM Walkthroughs:** Run `codiff -w` to generate an optimized commit walkthrough.
 - **Inline Review Comments:** Comment directly on GitHub pull requests and GitLab merge requests, or copy review comments as Markdown for follow-ups.
 - **Lightweight Definition Navigation:** Mod/Ctrl-click an identifier to find likely local definitions without starting a language server.
 
@@ -63,22 +62,10 @@ Full GitHub and GitLab review URLs are also supported. GitLab hosts and nested p
 derived from the URL or local Git remote and authenticated through `glab`; Codiff does not require
 instance-specific configuration.
 
-Start with an LLM-generated narrative walkthrough. When generating a walkthrough without an
-explicit target, Codiff uses local changes when present and falls back to `HEAD` when the working
-tree is clean:
+Share a Markdown plan:
 
 ```bash
-codiff -w
-codiff -w a1b2c3d
-```
-
-When walkthrough sharing is available for your Git identity, generate and upload the same
-walkthrough without opening Codiff. The same default applies to generated walkthroughs, and the
-command prints the final URL:
-
-```bash
-codiff --share
-codiff --share HEAD
+codiff --plan plan.md --share
 ```
 
 Show all available options:
@@ -114,7 +101,7 @@ The command bar includes actions for common review workflows:
 
 - Focus File Filter
 - Find in Diffs
-- Show File Tree, Show History, and Show Walkthrough
+- Show File Tree and Show History
 - Copy Review Comments
 - Copy Review Comments and Close
 - Toggle Viewed for the currently selected file
@@ -137,21 +124,15 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
 {
   "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
   "settings": {
-    "agentBackend": "codex",
-    "claudeModel": "sonnet",
     "codeFontFamily": "",
     "codeFontSize": 13,
     "copyCommentsOnClose": false,
     "diffStyle": "split",
     "editorCommand": "",
     "lastRepositoryPath": "",
-    "openAIModel": "gpt-5.6-terra",
-    "openAIReasoningEffort": "",
-    "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
     "showWhitespace": false,
     "theme": "system",
-    "walkthroughPrompt": "",
     "wordWrap": false,
   },
   "keymap": {
@@ -163,7 +144,6 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "prevSearchMatch": "Shift+Enter",
     "closeSearch": "Escape",
     "submitComment": "Mod+Enter",
-    "askAgent": "Mod+Alt+Enter",
     "discardComment": "Escape",
     "toggleSidebar": "Mod+Shift+b",
   },
@@ -192,99 +172,6 @@ Set `settings.codeFontFamily` manually to an installed CSS font family name, for
 Use `Mod` for <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on other platforms. Shortcut strings can
 combine `Mod`, `Ctrl`, `Alt`, `Shift`, or `Meta` with a key, for example `Mod+k` or
 `Alt+Enter`.
-
-## Walkthroughs
-
-Codiff uses a local agent CLI for walkthroughs and inline review assistance. On the first launch
-without an existing config file, it selects the first installed CLI in this order: Codex, Claude
-Code, OpenCode, then Pi. This checks executable presence only and persists the selection. If none
-are installed, Codiff keeps Codex as the default. After that, select a backend with the
-`settings.agentBackend` config value (or the `--agent` flag for a single launch) and the `Agent`
-application menu:
-
-- `codex` (default) — the OpenAI Codex CLI, configured with `settings.openAIModel`.
-- `claude` — the [Claude Code](https://claude.com/claude-code) CLI, configured with `settings.claudeModel`.
-- `opencode` — the [OpenCode](https://opencode.ai/) CLI, configured with
-  `settings.opencodeModel`.
-- `pi` — the Pi CLI, using its configured default model.
-
-The Codex `Model` and `Reasoning Effort` menus load the installed CLI's model catalog in the
-background. They offer its visible models and supported reasoning efforts, including new models
-without a Codiff update. Legacy models omitted from a successful catalog, including GPT-5.5,
-remain configurable by ID; a selected model missing from the catalog appears as a custom choice.
-If discovery fails or an older CLI does not support it, the predefined model choices remain
-available, and selecting Codex or changing configuration retries discovery. Custom model IDs in
-`settings.openAIModel` are also accepted.
-
-Set `settings.openAIReasoningEffort` to an effort supported by your selected model, for example
-`"high"` with `settings.openAIModel` set to `"gpt-6.1-sol"`. Selecting a different model in the menu
-resets an explicit effort that the new model does not advertise. Leave the effort empty to keep
-Codiff's existing defaults for its predefined models and inherit Codex settings for other models.
-An unsupported explicit effort reports an error rather than triggering a model fallback.
-An explicit effort also applies to a fallback model; clear it to use that model's default.
-Walkthrough caches distinguish explicit reasoning efforts, so a new generation request with a
-different effort does not reuse the previous effort's result.
-
-Codex walkthroughs still default to GPT-5.6 Terra with low reasoning. GPT-5.6 Sol and Luna use
-medium reasoning unless you override it. If a selected model is unavailable, Codiff retries with
-Terra when applicable and then GPT-5.5, persisting the first model that succeeds unless you changed
-the selection during the run. Walkthroughs with at least 100 reviewable hunks use GPT-5.5 with low
-reasoning when Terra is the configured default and no explicit effort is configured. An explicit
-effort keeps the selected model for these large walkthroughs.
-
-Install the backend you want and verify it is available before using `codiff -w`:
-
-```bash
-codex --version
-claude --version
-opencode --version
-pi --version
-```
-
-Codiff looks for the CLI on `PATH` and the usual install locations. On macOS, it also recognizes
-the CLI embedded in `Codex.app` or `ChatGPT.app` under `/Applications` or `~/Applications`. It does
-not run your shell startup files to discover CLIs. If a CLI is installed somewhere else, launch
-Codiff with an explicit path:
-
-```bash
-CODIFF_CODEX_PATH=/absolute/path/to/codex codiff -w
-CODIFF_CLAUDE_PATH=/absolute/path/to/claude codiff --agent claude -w
-CODIFF_OPENCODE_PATH=/absolute/path/to/opencode codiff --agent opencode -w
-CODIFF_PI_PATH=/absolute/path/to/pi codiff --agent pi -w
-```
-
-Claude Code rides your existing `claude` login (subscription or `ANTHROPIC_API_KEY`); run `claude`
-once and complete `/login` if you have not already.
-
-OpenCode keeps its own configured model when `settings.opencodeModel` is `opencode-default`.
-Choose another model from the application `Model` menu, or set a provider-qualified id such as
-`anthropic/claude-sonnet-4-6`, `openai/gpt-5.5`, or another model available to your OpenCode
-account. When Codiff launches OpenCode for walkthroughs or review assistance and an explicit model
-is unavailable, it retries with OpenCode's configured default and persists that fallback. The
-managed `/codiff` command runs directly in OpenCode, so OpenCode reports access errors for its
-selected model; choose `opencode-default` when portability is more important than pinning.
-
-Set `settings.walkthroughPrompt` to add custom instructions to generated walkthrough prompts. Use it
-to request a specific language, tone, or level of detail while Codiff keeps its walkthrough guide,
-hunk ids, review-order constraints, and JSON schema in place.
-
-To drive Codiff from your agent, install its integration from the application menu under
-`Install Skill`, then choose Codex, Claude Code, Pi, or OpenCode. Codiff updates keep the installed
-skill current. The OpenCode integration also installs a managed `/codiff` command that uses
-`settings.opencodeModel`; choosing `opencode-default` leaves the command unpinned. Invoke it from
-the agent:
-
-```text
-$codiff       /codiff        # author a narrative walkthrough and open Codiff
-```
-
-In OpenCode, `/codiff` uses the model selected in Codiff while `$codiff` runs as part of the
-current session and therefore uses that session's active model.
-
-`codiff` asks Codiff for the current authoring guide (`codiff --walkthrough-guide`), writes a
-narrative walkthrough JSON to a temporary file, and opens Codiff on it with `--walkthrough-file`
-plus the current session id. Because the guidance lives in Codiff, the installed skill stays a thin
-shim while the walkthrough sees the original conversation context without a lossy summary handoff.
 
 ## Development
 

@@ -76,7 +76,7 @@ The public service is a Cloudflare Worker backed by D1, R2, and a Durable
 Object. Wrangler provides local versions of these bindings, so ordinary web
 development does not require a Cloudflare account.
 
-Public plan and walkthrough shares are unlisted. Creating a share requires a
+Public plan shares are unlisted. Creating a share requires a
 GitHub-authenticated account, while reading a share only requires its
 unguessable URL.
 
@@ -139,17 +139,7 @@ Do not edit files under `web/.fate/` or `web/.void/` manually.
 
 ### Test Sharing End to End
 
-Point the Codiff CLI at the local public service:
-
-```bash
-CODIFF_SHARE_SERVER_URL=http://localhost:6002 \
-  node ./bin/codiff.js --share --public
-```
-
-The command opens the GitHub sign-in and claim page, uploads the walkthrough
-after authentication, and prints the local share URL.
-
-To test a plan:
+Point the Codiff CLI at the local public service to test a plan:
 
 ```bash
 CODIFF_SHARE_SERVER_URL=http://localhost:6002 \

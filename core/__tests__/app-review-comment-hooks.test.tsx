@@ -85,40 +85,6 @@ afterEach(() => {
   window.codiff = originalCodiff;
 });
 
-test('app review comments request and store assistant replies', async () => {
-  const askReviewAssistant = vi.fn(async () => ({
-    reply: 'Use the shared parser.',
-    status: 'ready' as const,
-  }));
-  window.codiff = { askReviewAssistant } as unknown as Window['codiff'];
-  await using view = await renderAppReviewComments(workingTreeState);
-  const { getState, onCommentFileChange } = view;
-
-  await act(async () => {
-    getState().setReviewComments([comment]);
-  });
-  await act(async () => {
-    getState().askCodex(comment.id);
-  });
-  expect(askReviewAssistant).toHaveBeenCalledWith({
-    comment: {
-      body: comment.body,
-      filePath: comment.filePath,
-      lineNumber: comment.lineNumber,
-      sectionId: comment.sectionId,
-      side: comment.side,
-    },
-    source: workingTreeState.source,
-  });
-  await waitFor(() => {
-    expect(getState().reviewComments[0]?.codexReply).toEqual({
-      body: 'Use the shared parser.',
-      status: 'ready',
-    });
-  });
-  expect(onCommentFileChange).toHaveBeenCalledTimes(2);
-});
-
 test('app review comments submit a draft and replace it with the remote comment', async () => {
   const submitPullRequestComment = vi.fn(async () => ({
     author: {

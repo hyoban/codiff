@@ -14,5 +14,4 @@ export {
   type ShareStats,
   type ShareStatsDay,
   type UploadIntent,
-  type Walkthrough,
 } from '@nkzw/codiff-service/views';

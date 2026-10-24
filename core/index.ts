@@ -11,7 +11,6 @@ export type {
   CodiffPreferences,
   DiffSection,
   GitIdentity,
-  NarrativeWalkthrough,
   PlanCommentThread,
   PullRequestCodeQualityFinding,
   PullRequestGeneralComment,
@@ -27,9 +26,6 @@ export type {
   RepositoryState,
   ReviewSource,
   SharePlanResult,
-  ShareWalkthroughResult,
   SharedPlanSnapshot,
-  SharedWalkthroughSnapshot,
-  WalkthroughShareManifestV1,
-  WalkthroughHunk,
+  ReviewHunk,
 } from './types.ts';

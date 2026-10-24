@@ -948,7 +948,6 @@ function createTestContext({
   vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue(platform);
 
   const keymap = {
-    askAgent: 'Mod+Alt+Enter',
     closeSearch: 'Escape',
     commandBar: 'Mod+k',
     diffSearch: 'Mod+f',

@@ -106,11 +106,7 @@ type GitStateModule = {
     source?: ReviewSource,
     options?: { showWhitespace?: boolean },
   ) => Promise<RepositoryState>;
-  readWalkthroughRepositoryState: (
-    launchPath: string,
-    source?: ReviewSource,
-    options?: { showWhitespace?: boolean },
-  ) => Promise<RepositoryState>;
+
   readWorkingTreeState: (
     launchPath: string,
     options?: { eagerContents?: boolean; showWhitespace?: boolean },
@@ -159,7 +155,7 @@ const {
   readDiffSectionContent,
   readRepositoryChangeSignature,
   readRepositoryState,
-  readWalkthroughRepositoryState,
+
   readWorkingTreeState,
   resolvePullRequestContentRefs,
   selectUnresolvedReviewComments,
@@ -1164,72 +1160,6 @@ test('readRepositoryState and history handle fresh repositories', async () => {
     expect(state.files.map((file) => file.path)).toEqual(['notes/todo.txt']);
   });
 });
-
-test('readWalkthroughRepositoryState falls back to HEAD only for a clean implicit source', () =>
-  withRepo(async (repo) => {
-    await writeRepoFile(repo, 'example.txt', 'before\n');
-    await commitAll(repo, 'initial commit');
-    await writeRepoFile(repo, 'example.txt', 'after\n');
-    await commitAll(repo, 'update example');
-
-    const cleanState = await readWalkthroughRepositoryState(repo);
-    expect(cleanState.source).toMatchObject({ type: 'commit' });
-    expect(cleanState.commitMetadata?.subject).toBe('update example');
-
-    const explicitWorkingTreeState = await readWalkthroughRepositoryState(repo, {
-      type: 'working-tree',
-    });
-    expect(explicitWorkingTreeState.source).toEqual({ type: 'working-tree' });
-    expect(explicitWorkingTreeState.files).toEqual([]);
-
-    await writeRepoFile(repo, 'example.txt', 'local\n');
-    const dirtyState = await readWalkthroughRepositoryState(repo);
-    expect(dirtyState.source).toEqual({ type: 'working-tree' });
-  }));
-
-test('readWalkthroughRepositoryState keeps a fresh repository on the working tree', () =>
-  withRepo(async (repo) => {
-    const state = await readWalkthroughRepositoryState(repo);
-    expect(state.source).toEqual({ type: 'working-tree' });
-    expect(state.files).toEqual([]);
-  }));
-
-test('readWalkthroughRepositoryState preserves nested launch paths', () =>
-  withRepo(async (repo) => {
-    await writeRepoFile(repo, 'nested/example.txt', 'before\n');
-    await commitAll(repo, 'initial commit');
-    const launchPath = join(repo, 'nested');
-
-    const cleanState = await readWalkthroughRepositoryState(launchPath);
-    expect(cleanState.launchPath).toBe(launchPath);
-    expect(cleanState.root).toBe(repo);
-
-    await writeRepoFile(repo, 'nested/example.txt', 'after\n');
-    const dirtyState = await readWalkthroughRepositoryState(launchPath);
-    expect(dirtyState.launchPath).toBe(launchPath);
-    expect(dirtyState.root).toBe(repo);
-  }));
-
-test(
-  'clean implicit walkthrough reads use a bounded number of Git processes',
-  { concurrent: false },
-  () =>
-    withRepo(async (repo) => {
-      await writeRepoFile(repo, 'example.txt', 'before\n');
-      await commitAll(repo, 'initial commit');
-
-      const tracePath = join(repo, '.git', 'walkthrough-trace.jsonl');
-      await using _environment = createTemporaryEnvironment({ GIT_TRACE2_EVENT: tracePath });
-      await readWalkthroughRepositoryState(repo);
-      const processCount = readFileSync(tracePath, 'utf8')
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as { event?: string })
-        .filter(({ event }) => event === 'version').length;
-      expect(processCount).toBeLessThanOrEqual(14);
-    }),
-);
 
 test('readRepositoryState reports commit metadata for root commits', async () => {
   await withRepo(async (repo) => {

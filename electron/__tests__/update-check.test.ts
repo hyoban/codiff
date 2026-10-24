@@ -195,41 +195,6 @@ test('releasePageUrl links to the tagged release', () => {
   expect(releasePageUrl('1.9.3')).toBe('https://github.com/nkzw-tech/codiff/releases/tag/v1.9.3');
 });
 
-test('fetchLatestRelease parses the release and sends a User-Agent', async () => {
-  let userAgent: string | undefined;
-  const server = createServer((request, response) => {
-    userAgent = request.headers['user-agent'];
-    response.setHeader('content-type', 'application/json');
-    response.end(
-      JSON.stringify({
-        assets: [
-          {
-            browser_download_url:
-              'https://github.com/nkzw-tech/codiff/releases/download/v1.9.3/Codiff-darwin-arm64-1.9.3.zip',
-            digest: 'sha256:4db4acfef44780957e2801700008c94399f57d84f7971a948a3e2851c1366175',
-            name: 'Codiff-darwin-arm64-1.9.3.zip',
-          },
-        ],
-        tag_name: 'v1.9.3',
-      }),
-    );
-  });
-  await using _ = await bindDisposableHttpServer(server);
-  const port = (server.address() as { port: number }).port;
-
-  const release = await fetchLatestRelease(`http://127.0.0.1:${port}/`);
-
-  expect(release.version).toBe('1.9.3');
-  expect(release.assets).toEqual([
-    {
-      digest: 'sha256:4db4acfef44780957e2801700008c94399f57d84f7971a948a3e2851c1366175',
-      name: 'Codiff-darwin-arm64-1.9.3.zip',
-      url: 'https://github.com/nkzw-tech/codiff/releases/download/v1.9.3/Codiff-darwin-arm64-1.9.3.zip',
-    },
-  ]);
-  expect(userAgent).toBeTruthy();
-});
-
 test('fetchLatestRelease rejects on a non-2xx response', async () => {
   const server = createServer((_request, response) => {
     response.statusCode = 500;

@@ -124,12 +124,7 @@ export const planShareManifestV1Schema = looseObject({
     ),
     version: literal(1),
   }),
-  source: optional(
-    looseObject({
-      agent: optional(picklist(['claude', 'codex', 'opencode', 'pi'])),
-      sessionId: optional(boundedString(200)),
-    }),
-  ),
+
   version: literal(1),
 });
 

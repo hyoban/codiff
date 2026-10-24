@@ -1,6 +1,6 @@
 import type { ChangedFile } from '../types.ts';
 import type { ReviewIdentity } from './app-types.ts';
-import { getSectionWalkthroughHunks } from './narrative-walkthrough-diff.js';
+import { getSectionReviewHunks } from './diff-hunks.js';
 
 export const getFileReviewIdentity = (file: ChangedFile): ReviewIdentity => ({
   fingerprint: file.fingerprint,
@@ -17,7 +17,7 @@ export const getSectionReviewHunkIds = (
   file: ChangedFile,
   section: ChangedFile['sections'][number],
 ): ReadonlyArray<string> => {
-  const ids = getSectionWalkthroughHunks(file, section).map((hunk) => hunk.id);
+  const ids = getSectionReviewHunks(file, section).map((hunk) => hunk.id);
   return ids.length > 0 ? ids : [section.id];
 };
 

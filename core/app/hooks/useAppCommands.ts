@@ -94,11 +94,7 @@ export function useAppCommands({
         id: 'sidebar-history',
         title: 'Show History',
       }),
-      registry.register({
-        execute: () => changeSidebarMode('walkthrough'),
-        id: 'sidebar-walkthrough',
-        title: 'Show Walkthrough',
-      }),
+
       registry.register({
         execute: () => {
           const currentState = stateRef.current;

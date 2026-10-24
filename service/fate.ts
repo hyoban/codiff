@@ -1,4 +1,4 @@
-import type { PullRequestGeneralCommentThread, SharedPlanSnapshot } from '@nkzw/codiff-core';
+import type { SharedPlanSnapshot } from '@nkzw/codiff-core';
 import { parsePlanShareManifest } from '@nkzw/codiff-core/share';
 import {
   createFateServer,
@@ -28,7 +28,6 @@ import schema, {
   uploadIntent,
   user,
   walkthrough,
-  walkthroughFile,
   type ShareCommentThreadRow,
   type UserRow,
 } from './schema.ts';
@@ -42,7 +41,6 @@ import {
   shareStatsDataView,
   uploadIntentDataView,
   uploadIntentSecretHeader,
-  walkthroughDataView,
   type ShareStatsRecord,
 } from './views.ts';
 
@@ -163,160 +161,6 @@ const importPlanComments = async (
   await database.update(plan).set({ commentsImportedAt: new Date() }).where(eq(plan.id, planId));
 };
 
-type WalkthroughReviewComment = {
-  anchor?: 'file' | 'line';
-  author: { avatarUrl?: string; login: string; name?: string };
-  body: string;
-  filePath: string;
-  id: string;
-  isThreadResolved?: boolean;
-  lineNumber?: number;
-  sectionId?: string;
-  side?: 'additions' | 'deletions';
-  startLineNumber?: number;
-  startSide?: 'additions' | 'deletions';
-  submittedAt?: string;
-  threadId?: string;
-};
-
-type WalkthroughImportSnapshot = {
-  exportedAt?: string;
-  repository: { generalComments?: ReadonlyArray<PullRequestGeneralCommentThread> };
-  reviewComments?: ReadonlyArray<WalkthroughReviewComment>;
-};
-
-const parseWalkthroughImportSnapshot = (value: unknown): WalkthroughImportSnapshot => {
-  if (!isRecord(value) || !isRecord(value.repository)) {
-    throw new Error('Invalid walkthrough manifest.');
-  }
-  return value as WalkthroughImportSnapshot;
-};
-
-const importWalkthroughComments = async (
-  database: Database,
-  walkthroughId: string,
-  snapshot: WalkthroughImportSnapshot,
-) => {
-  const statements: Array<DatabaseBatchStatement> = [];
-  const groups = new Map<string, Array<WalkthroughReviewComment>>();
-  for (const comment of snapshot.reviewComments ?? []) {
-    const key = comment.threadId ? `thread:${comment.threadId}` : `comment:${comment.id}`;
-    const group = groups.get(key);
-    if (group) {
-      group.push(comment);
-    } else {
-      groups.set(key, [comment]);
-    }
-  }
-
-  for (const [sourceId, comments] of groups) {
-    const first = comments[0];
-    if (!first) {
-      continue;
-    }
-    const isFileComment = first.anchor === 'file';
-    if (!isFileComment && (first.lineNumber == null || first.side == null)) {
-      continue;
-    }
-    const createdAt = validDate(first.submittedAt, validDate(snapshot.exportedAt, new Date()));
-    const resolved = comments.some((comment) => comment.isThreadResolved === true);
-    const sourceThreadId = `walkthrough-diff:${sourceId}`;
-    const threadId = importedThreadId(walkthroughId, sourceThreadId);
-    statements.push(
-      database
-        .insert(shareCommentThread)
-        .values({
-          createdAt,
-          filePath: first.filePath,
-          id: threadId,
-          kind: 'walkthrough-diff',
-          lineNumber: isFileComment ? null : first.lineNumber,
-          resolvedAt: resolved ? createdAt : null,
-          sectionId: first.sectionId ?? null,
-          side: isFileComment ? null : first.side,
-          sourceThreadId,
-          startLineNumber: isFileComment ? null : (first.startLineNumber ?? null),
-          startSide: isFileComment ? null : (first.startSide ?? null),
-          status: resolved ? 'resolved' : 'open',
-          updatedAt: validDate(comments.at(-1)?.submittedAt, createdAt),
-          walkthroughId,
-        })
-        .onConflictDoNothing(),
-    );
-    for (const comment of comments) {
-      const submittedAt = validDate(comment.submittedAt, createdAt);
-      statements.push(
-        database
-          .insert(shareCommentMessage)
-          .values({
-            authorImage: comment.author.avatarUrl ?? null,
-            authorName: comment.author.name ?? comment.author.login,
-            authorUserId: null,
-            authorUsername: comment.author.login,
-            body: comment.body,
-            createdAt: submittedAt,
-            id: crypto.randomUUID(),
-            sourceMessageId: `walkthrough-review:${comment.id}`,
-            threadId,
-            updatedAt: submittedAt,
-          })
-          .onConflictDoNothing(),
-      );
-    }
-  }
-
-  for (const thread of snapshot.repository.generalComments ?? []) {
-    const first = thread.comments[0];
-    if (!first) {
-      continue;
-    }
-    const createdAt = validDate(first.submittedAt, validDate(snapshot.exportedAt, new Date()));
-    const sourceThreadId = `walkthrough-general:${thread.id}`;
-    const threadId = importedThreadId(walkthroughId, sourceThreadId);
-    statements.push(
-      database
-        .insert(shareCommentThread)
-        .values({
-          createdAt,
-          id: threadId,
-          kind: 'walkthrough-general',
-          resolvedAt: thread.isResolved ? createdAt : null,
-          sourceThreadId,
-          status: thread.isResolved ? 'resolved' : 'open',
-          updatedAt: validDate(thread.comments.at(-1)?.submittedAt, createdAt),
-          walkthroughId,
-        })
-        .onConflictDoNothing(),
-    );
-    for (const comment of thread.comments) {
-      const submittedAt = validDate(comment.submittedAt, createdAt);
-      statements.push(
-        database
-          .insert(shareCommentMessage)
-          .values({
-            authorImage: comment.author.avatarUrl ?? null,
-            authorName: comment.author.name ?? comment.author.login,
-            authorUserId: null,
-            authorUsername: comment.author.login,
-            body: comment.body,
-            createdAt: submittedAt,
-            id: crypto.randomUUID(),
-            sourceMessageId: `walkthrough-general:${comment.id}`,
-            threadId,
-            updatedAt: submittedAt,
-          })
-          .onConflictDoNothing(),
-      );
-    }
-  }
-
-  await runDatabaseBatches(database, statements);
-  await database
-    .update(walkthrough)
-    .set({ commentsImportedAt: new Date() })
-    .where(eq(walkthrough.id, walkthroughId));
-};
-
 const readManifest = async (bucket: SharingBucket, objectKey: string) => {
   const object = await bucket.get(objectKey);
   if (!object) {
@@ -337,64 +181,6 @@ const ensurePlanCommentsImported = async (
       parsePlanShareManifest(await readManifest(bucket, record.objectKey)),
     );
   }
-};
-
-const ensureWalkthroughCommentsImported = async (
-  database: Database,
-  bucket: SharingBucket,
-  record: { commentsImportedAt: Date | null; id: string; objectKey: string },
-) => {
-  if (!record.commentsImportedAt) {
-    await importWalkthroughComments(
-      database,
-      record.id,
-      parseWalkthroughImportSnapshot(await readManifest(bucket, record.objectKey)),
-    );
-  }
-};
-
-const getWalkthroughFilePaths = (manifest: unknown) => {
-  if (!isRecord(manifest) || !Array.isArray(manifest.files)) {
-    return [];
-  }
-  return [
-    ...new Set(
-      manifest.files.flatMap((file) =>
-        isRecord(file) &&
-        typeof file.path === 'string' &&
-        file.path.length > 0 &&
-        file.path.length <= 4096
-          ? [file.path]
-          : [],
-      ),
-    ),
-  ];
-};
-
-const indexWalkthroughFiles = async (
-  database: Database,
-  walkthroughId: string,
-  filePaths: ReadonlyArray<string>,
-) => {
-  const statements: Array<DatabaseBatchStatement> = [];
-  for (let index = 0; index < filePaths.length; index += 40) {
-    statements.push(
-      database
-        .insert(walkthroughFile)
-        .values(
-          filePaths.slice(index, index + 40).map((path) => ({
-            path,
-            walkthroughId,
-          })),
-        )
-        .onConflictDoNothing(),
-    );
-  }
-  await runDatabaseBatches(database, statements);
-  await database
-    .update(walkthrough)
-    .set({ filesIndexedAt: new Date() })
-    .where(eq(walkthrough.id, walkthroughId));
 };
 
 const fetchShareStats = async (database: Database, now = new Date()): Promise<ShareStatsRecord> => {
@@ -471,34 +257,14 @@ export const shareCommentAnchorSchema = z
     message: 'Text anchors require a quote.',
     path: ['quote'],
   });
-const walkthroughCommentTargetBaseSchema = z.object({
-  filePath: z.string().min(1).max(4096),
-  kind: z.literal('walkthrough-diff'),
+export const shareCommentTargetSchema = z.object({
+  anchor: shareCommentAnchorSchema,
+  kind: z.literal('plan'),
 });
-export const shareCommentTargetSchema = z.union([
-  z.object({
-    anchor: shareCommentAnchorSchema,
-    kind: z.literal('plan'),
-  }),
-  walkthroughCommentTargetBaseSchema.extend({
-    anchor: z.literal('file'),
-  }),
-  walkthroughCommentTargetBaseSchema.extend({
-    anchor: z.literal('line').optional(),
-    lineNumber: z.number().int().positive(),
-    sectionId: z.string().min(1).max(4096).optional(),
-    side: z.enum(['additions', 'deletions']),
-    startLineNumber: z.number().int().positive().optional(),
-    startSide: z.enum(['additions', 'deletions']).optional(),
-  }),
-  z.object({
-    kind: z.literal('walkthrough-general'),
-  }),
-]);
 const createShareCommentThreadInput = z.object({
   body: shareCommentBodySchema,
   shareId: z.string().min(1).max(256),
-  shareType: z.enum(['plan', 'walkthrough']),
+  shareType: z.literal('plan'),
   target: shareCommentTargetSchema,
 });
 const replyShareCommentInput = z.object({
@@ -525,7 +291,6 @@ const databaseViews = {
   shareCommentMessage: shareCommentMessageDataView,
   shareCommentThread: shareCommentThreadDataView,
   uploadIntentByCode: uploadIntentDataView,
-  walkthroughBySlug: walkthroughDataView,
 };
 
 const getCommentThread = async (context: SharingFateContext, threadId: string) => {
@@ -534,7 +299,7 @@ const getCommentThread = async (context: SharingFateContext, threadId: string) =
     .from(shareCommentThread)
     .where(eq(shareCommentThread.id, threadId))
     .limit(1);
-  if (!thread) {
+  if (!thread || !thread.planId) {
     throw new FateRequestError('NOT_FOUND', 'Comment thread not found.');
   }
   return thread;
@@ -546,14 +311,6 @@ const getThreadOwnerId = async (context: SharingFateContext, thread: ShareCommen
       .select({ ownerId: plan.sharedByUserId })
       .from(plan)
       .where(eq(plan.id, thread.planId))
-      .limit(1);
-    return record?.ownerId ?? null;
-  }
-  if (thread.walkthroughId) {
-    const [record] = await context.db
-      .select({ ownerId: walkthrough.sharedByUserId })
-      .from(walkthrough)
-      .where(eq(walkthrough.id, thread.walkthroughId))
       .limit(1);
     return record?.ownerId ?? null;
   }
@@ -614,10 +371,6 @@ export const createSharingFateServer = ({
       live
         .connection('Plan.commentThreads', { id: thread.planId })
         .appendNode('ShareCommentThread', thread.id);
-    } else if (thread.walkthroughId) {
-      live
-        .connection('Walkthrough.commentThreads', { id: thread.walkthroughId })
-        .appendNode('ShareCommentThread', thread.id);
     }
   };
 
@@ -626,36 +379,8 @@ export const createSharingFateServer = ({
       live
         .connection('Plan.commentThreads', { id: thread.planId })
         .deleteEdge('ShareCommentThread', thread.id);
-    } else if (thread.walkthroughId) {
-      live
-        .connection('Walkthrough.commentThreads', { id: thread.walkthroughId })
-        .deleteEdge('ShareCommentThread', thread.id);
     }
     live.delete('ShareCommentThread', thread.id);
-  };
-
-  const validateWalkthroughCommentFile = async (
-    context: SharingFateContext,
-    record: { filesIndexedAt: Date | null; id: string; objectKey: string },
-    filePath: string,
-  ) => {
-    if (!record.filesIndexedAt) {
-      const manifest = await readManifest(context.env.WALKTHROUGH_BUCKET, record.objectKey);
-      const filePaths = getWalkthroughFilePaths(manifest);
-      await indexWalkthroughFiles(context.db, record.id, filePaths);
-      if (!filePaths.includes(filePath)) {
-        throw new FateRequestError('BAD_REQUEST', 'The comment target is not in this walkthrough.');
-      }
-      return;
-    }
-    const [file] = await context.db
-      .select({ path: walkthroughFile.path })
-      .from(walkthroughFile)
-      .where(and(eq(walkthroughFile.walkthroughId, record.id), eq(walkthroughFile.path, filePath)))
-      .limit(1);
-    if (!file) {
-      throw new FateRequestError('BAD_REQUEST', 'The comment target is not in this walkthrough.');
-    }
   };
 
   return createFateServer({
@@ -725,83 +450,36 @@ export const createSharingFateServer = ({
           const now = new Date();
           const threadId = crypto.randomUUID();
           const messageId = crypto.randomUUID();
-          let thread: ShareCommentThreadRow;
 
-          if (input.shareType === 'plan') {
-            if (input.target.kind !== 'plan') {
-              throw new FateRequestError('BAD_REQUEST', 'A plan comment needs a plan target.');
-            }
-            const [record] = await ctx.db
-              .select({ id: plan.id })
-              .from(plan)
-              .where(eq(plan.id, input.shareId))
-              .limit(1);
-            if (!record) {
-              throw new FateRequestError('NOT_FOUND', 'Shared plan not found.');
-            }
-            thread = {
-              anchorJson: JSON.stringify(input.target.anchor),
-              createdAt: now,
-              filePath: null,
-              id: threadId,
-              kind: 'plan',
-              lineNumber: null,
-              planId: record.id,
-              resolvedAt: null,
-              sectionId: null,
-              side: null,
-              sourceThreadId: null,
-              startLineNumber: null,
-              startSide: null,
-              status: 'open',
-              updatedAt: now,
-              walkthroughId: null,
-            };
-          } else {
-            if (input.target.kind === 'plan') {
-              throw new FateRequestError(
-                'BAD_REQUEST',
-                'A walkthrough comment needs a walkthrough target.',
-              );
-            }
-            const [record] = await ctx.db
-              .select({
-                filesIndexedAt: walkthrough.filesIndexedAt,
-                id: walkthrough.id,
-                objectKey: walkthrough.objectKey,
-              })
-              .from(walkthrough)
-              .where(eq(walkthrough.id, input.shareId))
-              .limit(1);
-            if (!record) {
-              throw new FateRequestError('NOT_FOUND', 'Shared walkthrough not found.');
-            }
-            if (input.target.kind === 'walkthrough-diff') {
-              await validateWalkthroughCommentFile(ctx, record, input.target.filePath);
-            }
-            const lineTarget =
-              input.target.kind === 'walkthrough-diff' && input.target.anchor !== 'file'
-                ? input.target
-                : null;
-            thread = {
-              anchorJson: null,
-              createdAt: now,
-              filePath: input.target.kind === 'walkthrough-diff' ? input.target.filePath : null,
-              id: threadId,
-              kind: input.target.kind,
-              lineNumber: lineTarget?.lineNumber ?? null,
-              planId: null,
-              resolvedAt: null,
-              sectionId: lineTarget?.sectionId ?? null,
-              side: lineTarget?.side ?? null,
-              sourceThreadId: null,
-              startLineNumber: lineTarget?.startLineNumber ?? null,
-              startSide: lineTarget?.startSide ?? null,
-              status: 'open',
-              updatedAt: now,
-              walkthroughId: record.id,
-            };
+          if (input.target.kind !== 'plan') {
+            throw new FateRequestError('BAD_REQUEST', 'A plan comment needs a plan target.');
           }
+          const [record] = await ctx.db
+            .select({ id: plan.id })
+            .from(plan)
+            .where(eq(plan.id, input.shareId))
+            .limit(1);
+          if (!record) {
+            throw new FateRequestError('NOT_FOUND', 'Shared plan not found.');
+          }
+          const thread: ShareCommentThreadRow = {
+            anchorJson: JSON.stringify(input.target.anchor),
+            createdAt: now,
+            filePath: null,
+            id: threadId,
+            kind: 'plan',
+            lineNumber: null,
+            planId: record.id,
+            resolvedAt: null,
+            sectionId: null,
+            side: null,
+            sourceThreadId: null,
+            startLineNumber: null,
+            startSide: null,
+            status: 'open',
+            updatedAt: now,
+            walkthroughId: null,
+          };
 
           await ctx.db.batch([
             ctx.db.insert(shareCommentThread).values(thread),
@@ -1022,49 +700,6 @@ export const createSharingFateServer = ({
         },
         type: 'ShareCommentMessage',
       },
-      'walkthrough.delete': {
-        input: deleteShareInput,
-        resolve: async ({
-          ctx,
-          input,
-          select,
-        }: {
-          ctx: SharingFateContext;
-          input: z.infer<typeof deleteShareInput>;
-          select: Array<string>;
-        }) => {
-          const owner = await requireAuthenticatedUser(ctx);
-          const [record] = await ctx.db
-            .select()
-            .from(walkthrough)
-            .where(eq(walkthrough.id, input.id))
-            .limit(1);
-          if (!record) {
-            throw new FateRequestError('NOT_FOUND', 'Shared walkthrough not found.');
-          }
-          if (record.sharedByUserId !== owner.id) {
-            throw new FateRequestError(
-              'FORBIDDEN',
-              'Only the share owner can delete this walkthrough.',
-            );
-          }
-          const deleted = await createResolver({
-            ctx,
-            select,
-            view: walkthroughDataView,
-          }).resolve(record);
-          await ctx.env.WALKTHROUGH_BUCKET.delete(record.objectKey);
-          const deletedRows = await ctx.db
-            .delete(walkthrough)
-            .where(and(eq(walkthrough.id, record.id), eq(walkthrough.sharedByUserId, owner.id)))
-            .returning({ id: walkthrough.id });
-          if (deletedRows.length === 0) {
-            throw new FateRequestError('NOT_FOUND', 'Shared walkthrough not found.');
-          }
-          return deleted;
-        },
-        type: 'Walkthrough',
-      },
     },
     queries: {
       planBySlug: {
@@ -1211,48 +846,6 @@ export const createSharingFateServer = ({
           });
         },
         type: 'UploadIntent',
-      },
-      walkthroughBySlug: {
-        resolve: async ({
-          ctx,
-          input,
-          select,
-        }: {
-          ctx: SharingFateContext;
-          input: { args?: { slug: string } };
-          select: Array<string>;
-        }) => {
-          const slug = input.args?.slug;
-          if (!slug) {
-            throw new FateRequestError('BAD_REQUEST', 'A walkthrough slug is required.');
-          }
-          const [record] = await ctx.db
-            .select({
-              commentsImportedAt: walkthrough.commentsImportedAt,
-              id: walkthrough.id,
-              objectKey: walkthrough.objectKey,
-            })
-            .from(walkthrough)
-            .where(eq(walkthrough.slug, slug))
-            .limit(1);
-          if (!record) {
-            return null;
-          }
-          if (
-            select.some(
-              (field) => field === 'commentThreads' || field.startsWith('commentThreads.'),
-            )
-          ) {
-            await ensureWalkthroughCommentsImported(ctx.db, ctx.env.WALKTHROUGH_BUCKET, record);
-          }
-          return sources.resolveById({
-            ctx,
-            id: record.id,
-            input: { select },
-            view: walkthroughDataView,
-          });
-        },
-        type: 'Walkthrough',
       },
     },
     roots: SharingRoot,

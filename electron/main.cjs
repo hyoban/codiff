@@ -22,29 +22,16 @@ const {
   readDiffSectionContent,
   readGitIdentity,
   readRepositoryState,
-  readWalkthroughRepositoryState,
+
   submitPullRequestComment,
   submitPullRequestReview,
   validateRepositoryPath,
 } = require('./git-state.cjs');
 const { attachExternalLinkHandling } = require('./external-links.cjs');
-const { normalizeOpenAIModel } = require('./codex.cjs');
-const { readCodexModels } = require('./codex-models.cjs');
-const { normalizeClaudeModel } = require('./claude.cjs');
-const { normalizeOpenCodeModel, renderOpenCodeCommand } = require('./opencode.cjs');
-const { createWalkthroughCommit } = require('./walkthrough-commit.cjs');
+
+const { createCommit } = require('./commit.cjs');
 const { readKeyboardLayout, watchKeyboardLayout } = require('./keyboard-layout.cjs');
-const { diagnoseWalkthroughMismatch } = require('./walkthrough-diagnosis.cjs');
-const { readCommitMessageReply } = require('./walkthrough-commit-message.cjs');
-const { normalizePiModel } = require('./pi.cjs');
-const {
-  detectInitialAgentBackend,
-  getAgent,
-  getAgentMenuModels,
-  listAgents,
-  normalizeAgentBackend,
-} = require('./agent.cjs');
-const { buildInstallSkillMenuItem, listAgentSkills } = require('./agent-skills.cjs');
+
 const {
   configToPreferences,
   createDefaultConfig,
@@ -57,7 +44,7 @@ const {
   watchConfig,
   writeConfig,
 } = require('./config.cjs');
-const { readReviewAssistantReply } = require('./review-assist.cjs');
+
 const { releasePageUrl } = require('./update-check.cjs');
 const { createUpdater, resolveUpdateStrategy } = require('./updater.cjs');
 const { parseReviewUrl, resolveReviewUrl } = require('./review-source.cjs');
@@ -79,7 +66,7 @@ const {
   getLaunchOptions,
   getLaunchPath,
 } = require('./main/command-line.cjs');
-const { createSkillInstaller } = require('./main/agent-skill.cjs');
+
 const { createEditorOpener } = require('./main/editor.cjs');
 const { createDefinitionSearchCoordinator } = require('./definition-search.cjs');
 const { createTerminalHelper } = require('./main/terminal-helper.cjs');
@@ -91,20 +78,11 @@ const {
   validateWindowStateOnScreen,
   writeWindowState,
 } = require('./window-state.cjs');
-const {
-  getNarrativeWalkthroughCacheKey,
-  normalizeNarrativeWalkthrough,
-  readNarrativeWalkthrough,
-  resolveNarrativeWalkthroughModel,
-} = require('./narrative-walkthrough.cjs');
-const { readStoredWalkthrough, writeStoredWalkthrough } = require('./walkthrough-store.cjs');
-const { uploadSharedSnapshot } = require('./shared-walkthrough-upload.cjs');
-const {
-  resolvePlanShareTarget,
-  resolveWalkthroughShareTarget,
-} = require('./walkthrough-sharing.cjs');
+
+const { uploadSharedSnapshot } = require('./shared-upload.cjs');
+const { resolvePlanShareTarget } = require('./sharing.cjs');
 const { createCloudflareAccessClient } = require('./cloudflare-access.cjs');
-const { mergeWalkthroughContexts } = require('./walkthrough-context.cjs');
+
 const {
   MarkdownDocumentConflictError,
   readMarkdownDocument,
@@ -119,7 +97,6 @@ const {
 } = require('./repository-watcher.cjs');
 const { getPlanReviewPath, readPlanReview, writePlanReview } = require('./plan-review.cjs');
 const { createSharedPlanSnapshot } = require('./shared-plan.cjs');
-const { createWalkthroughProgressReporter } = require('./walkthrough-progress.cjs');
 
 /**
  * @typedef {import('../core/config/types.ts').CodiffConfig} CodiffConfig
@@ -144,8 +121,6 @@ const windowRepositories = new Map();
 const windowLaunchOptions = new Map();
 /** @type {Map<number, Promise<RepositoryState>>} */
 const windowInitialRepositoryStates = new Map();
-/** @type {Map<number, number>} */
-const walkthroughProgressGenerations = new Map();
 /** @type {Map<number, string>} */
 const planInitialVersions = new Map();
 /** @type {Set<number>} */
@@ -159,42 +134,6 @@ const openWindows = new Set();
 const pendingCommentsClipboardController = createPendingCommentsClipboardController({ clipboard });
 /** @type {CodiffConfig} */
 let config = createDefaultConfig();
-/** @type {ReadonlyArray<import('./codex-models.cjs').CodexModel> | undefined} */
-let codexModels;
-/** @type {Promise<void> | undefined} */
-let codexModelDiscovery;
-const codexModelDiscoveryAbort = new AbortController();
-
-/**
- * @type {Map<string, ReturnType<typeof createSkillInstaller>>}
- */
-const skillInstallers = new Map(
-  listAgentSkills().map((skill) => [
-    skill.id,
-    createSkillInstaller({
-      app,
-      dialog,
-      renderManagedFile:
-        skill.id === 'opencode'
-          ? (_file, template) => renderOpenCodeCommand(template, config.settings.opencodeModel)
-          : undefined,
-      root,
-      skill,
-    }),
-  ]),
-);
-
-const refreshInstalledAgentFiles = () => {
-  for (const installer of skillInstallers.values()) {
-    try {
-      installer.refreshManagedFiles();
-    } catch {
-      // A stale or read-only managed file should not prevent Codiff from starting.
-    }
-  }
-};
-
-const getActiveAgent = () => getAgent(config.settings.agentBackend);
 
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
 const readRepositoryStateWithConfig = (repositoryPath, source) =>
@@ -204,24 +143,8 @@ const readRepositoryStateWithConfig = (repositoryPath, source) =>
 
 /** @param {string} repositoryPath @param {CodiffLaunchOptions} launchOptions */
 const readInitialRepositoryStateWithConfig = (repositoryPath, launchOptions) =>
-  launchOptions.walkthrough && !launchOptions.walkthroughFile
-    ? readWalkthroughRepositoryState(repositoryPath, launchOptions.source, {
-        showWhitespace: config.settings.showWhitespace,
-      })
-    : readRepositoryStateWithConfig(repositoryPath, launchOptions.source);
+  readRepositoryStateWithConfig(repositoryPath, launchOptions.source);
 
-/** @param {number} webContentsId */
-const resolveWindowAgent = (webContentsId) => {
-  const override = windowLaunchOptions.get(webContentsId)?.agentBackend;
-  return getAgent(
-    override === 'codex' || override === 'claude' || override === 'opencode' || override === 'pi'
-      ? override
-      : config.settings.agentBackend,
-  );
-};
-
-/** @param {'codex' | 'claude' | 'opencode' | 'pi'} agentId */
-const skillInstallerFor = (agentId) => skillInstallers.get(agentId);
 const { getTerminalHelperStatus, installTerminalHelper } = createTerminalHelper({
   app,
   dialog,
@@ -374,80 +297,21 @@ const updateConfig = (nextConfig) => {
     settings: {
       ...config.settings,
       ...nextConfig.settings,
-      agentBackend: normalizeAgentBackend(
-        nextConfig.settings?.agentBackend ?? config.settings.agentBackend,
-      ),
-      claudeModel: normalizeClaudeModel(
-        nextConfig.settings?.claudeModel ?? config.settings.claudeModel,
-      ),
+
       codeFontFamily: normalizeCodeFontFamily(
         nextConfig.settings?.codeFontFamily ?? config.settings.codeFontFamily,
       ),
       codeFontSize: normalizeCodeFontSize(
         nextConfig.settings?.codeFontSize ?? config.settings.codeFontSize,
       ),
-      openAIModel: normalizeOpenAIModel(
-        nextConfig.settings?.openAIModel ?? config.settings.openAIModel,
-      ),
-      opencodeModel: normalizeOpenCodeModel(
-        nextConfig.settings?.opencodeModel ?? config.settings.opencodeModel,
-      ),
-      piModel: normalizePiModel(nextConfig.settings?.piModel ?? config.settings.piModel),
     },
   };
   nativeTheme.themeSource = config.settings.theme;
   writeConfig(config);
-  refreshInstalledAgentFiles();
+
   sendConfigChanged();
   Menu.setApplicationMenu(buildApplicationMenu());
 };
-
-/** @param {'codex' | 'claude' | 'opencode' | 'pi'} backend */
-const selectAgentBackend = (backend) => {
-  const agentBackend = normalizeAgentBackend(backend);
-  if (config.settings.agentBackend === agentBackend) {
-    return;
-  }
-
-  updateConfig({ settings: { ...config.settings, agentBackend } });
-  if (agentBackend === 'codex') void loadCodexModels();
-};
-
-/** @param {import('./agent.cjs').Agent} agent @param {string} model */
-const selectAgentModel = (agent, model) => {
-  const normalized = agent.normalizeModel(model);
-  if (config.settings[agent.modelSettingKey] === normalized) {
-    return;
-  }
-
-  const modelInfo =
-    agent.id === 'codex' ? codexModels?.find((item) => item.id === normalized) : undefined;
-  const effort = config.settings.openAIReasoningEffort;
-  updateConfig({
-    settings: {
-      ...config.settings,
-      [agent.modelSettingKey]: normalized,
-      ...(modelInfo && effort && !modelInfo.reasoningEfforts.includes(effort)
-        ? { openAIReasoningEffort: '' }
-        : {}),
-    },
-  });
-};
-
-/** @param {import('./agent.cjs').Agent} agent */
-const getAgentOptions = (agent) => ({
-  fallbackModel: agent.fallbackModel,
-  model: config.settings[agent.modelSettingKey],
-  ...(agent.id === 'codex'
-    ? { reasoningEffort: config.settings.openAIReasoningEffort || undefined }
-    : {}),
-  /** @param {string} fallbackModel @param {string} originalModel */
-  onModelFallback: async (fallbackModel, originalModel) => {
-    if (config.settings[agent.modelSettingKey] === originalModel) {
-      updateConfig({ settings: { ...config.settings, [agent.modelSettingKey]: fallbackModel } });
-    }
-  },
-});
 
 /** @param {CodiffTheme} theme */
 const updateTheme = (theme) => {
@@ -563,67 +427,9 @@ const openRepositoryFolder = async (browserWindow) => {
     : await dialog.showOpenDialog(options);
 
   if (!result.canceled && result.filePaths[0]) {
-    focusOrCreateWindow(result.filePaths[0], { repositoryPathProvided: true, walkthrough: false });
+    focusOrCreateWindow(result.filePaths[0], { repositoryPathProvided: true });
   }
 };
-
-/** @returns {Array<import('electron').MenuItemConstructorOptions>} */
-const buildAgentSubmenu = () =>
-  listAgents().map((agent) => ({
-    checked: config.settings.agentBackend === agent.id,
-    click: () => selectAgentBackend(agent.id),
-    label: agent.label,
-    type: 'radio',
-  }));
-
-/** @returns {Array<import('electron').MenuItemConstructorOptions>} */
-const buildModelSubmenu = () => {
-  const agent = getActiveAgent();
-  const selectedModel = config.settings[agent.modelSettingKey];
-  return getAgentMenuModels(
-    agent,
-    selectedModel,
-    agent.id === 'codex' ? codexModels : undefined,
-  ).map((model) => ({
-    checked: selectedModel === model.id,
-    click: () => selectAgentModel(agent, model.id),
-    label: model.label,
-    type: 'radio',
-  }));
-};
-
-const loadCodexModels = () => {
-  codexModelDiscovery ??= readCodexModels({ signal: codexModelDiscoveryAbort.signal })
-    .then((models) => {
-      if (models.length && !codexModelDiscoveryAbort.signal.aborted) {
-        codexModels = models;
-        Menu.setApplicationMenu(buildApplicationMenu());
-      }
-    })
-    .catch(() => {
-      codexModelDiscovery = undefined;
-    });
-  return codexModelDiscovery;
-};
-
-/** @returns {Array<import('electron').MenuItemConstructorOptions>} */
-const buildReasoningEffortSubmenu = () => {
-  const selected = config.settings.openAIReasoningEffort;
-  const model = codexModels?.find((item) => item.id === config.settings.openAIModel);
-  const advertised = model ? model.reasoningEfforts : ['low', 'medium', 'high'];
-  const efforts = [...new Set(['', ...advertised, ...(selected ? [selected] : [])])];
-  return efforts.map((effort) => ({
-    checked: selected === effort,
-    click: () => updateConfig({ settings: { ...config.settings, openAIReasoningEffort: effort } }),
-    label: !effort ? 'Default' : advertised.includes(effort) ? effort : `Custom: ${effort}`,
-    type: 'radio',
-  }));
-};
-
-const getInstallSkillMenuItem = () =>
-  buildInstallSkillMenuItem(
-    (skill, browserWindow) => void skillInstallers.get(skill.id)?.install(browserWindow),
-  );
 
 /**
  * Native menus live in the main process, so this event lets the renderer own
@@ -669,17 +475,7 @@ const buildApplicationMenu = () =>
                   label: 'Open Branch',
                 },
                 { type: 'separator' },
-                {
-                  label: 'Agent',
-                  submenu: buildAgentSubmenu(),
-                },
-                {
-                  label: 'Model',
-                  submenu: buildModelSubmenu(),
-                },
-                ...(getActiveAgent().id === 'codex'
-                  ? [{ label: 'Reasoning Effort', submenu: buildReasoningEffortSubmenu() }]
-                  : []),
+
                 { type: 'separator' },
                 {
                   click: () => {
@@ -695,7 +491,7 @@ const buildApplicationMenu = () =>
                     ),
                   label: 'Install Terminal Helper',
                 },
-                getInstallSkillMenuItem(),
+
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideOthers' },
@@ -712,17 +508,6 @@ const buildApplicationMenu = () =>
           ...(process.platform === 'darwin'
             ? []
             : [
-                {
-                  label: 'Agent',
-                  submenu: buildAgentSubmenu(),
-                },
-                {
-                  label: 'Model',
-                  submenu: buildModelSubmenu(),
-                },
-                ...(getActiveAgent().id === 'codex'
-                  ? [{ label: 'Reasoning Effort', submenu: buildReasoningEffortSubmenu() }]
-                  : []),
                 { type: 'separator' },
                 {
                   click: () => {
@@ -738,7 +523,7 @@ const buildApplicationMenu = () =>
                     ),
                   label: 'Install Terminal Helper',
                 },
-                getInstallSkillMenuItem(),
+
                 { type: 'separator' },
               ]),
           {
@@ -946,7 +731,7 @@ ipcMain.on(
  */
 const createWindow = (
   repositoryPath,
-  launchOptions = { repositoryPathProvided: true, walkthrough: false },
+  launchOptions = { repositoryPathProvided: true },
   identity = getWindowIdentity(repositoryPath, launchOptions),
 ) => {
   const savedState = readWindowState();
@@ -1122,7 +907,6 @@ const createWindow = (
     windowIdentities.delete(webContentsId);
     windowRevealControllers.delete(webContentsId);
     windowInitialRepositoryStates.delete(webContentsId);
-    walkthroughProgressGenerations.delete(webContentsId);
     windowRepositories.delete(webContentsId);
     windowLaunchOptions.delete(webContentsId);
   });
@@ -1192,20 +976,6 @@ const focusWindow = (window) => {
 };
 
 /** @param {number} webContentsId */
-const getWalkthroughShareContext = async (webContentsId) => {
-  const repositoryPath = windowRepositories.get(webContentsId) || getLaunchPath();
-  const uploader = await readGitIdentity(repositoryPath);
-
-  return {
-    target: resolveWalkthroughShareTarget({
-      email: uploader.email,
-      overrideUrl: process.env.CODIFF_SHARE_SERVER_URL,
-    }),
-    uploader,
-  };
-};
-
-/** @param {number} webContentsId */
 const getPlanShareContext = async (webContentsId) => {
   const repositoryPath = windowRepositories.get(webContentsId) || getLaunchPath();
   const uploader = await readGitIdentity(repositoryPath);
@@ -1266,10 +1036,7 @@ const shareSnapshot = async (context, snapshot) => {
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} [launchOptions]
  */
-const focusOrCreateWindow = (
-  repositoryPath,
-  launchOptions = { repositoryPathProvided: true, walkthrough: false },
-) => {
+const focusOrCreateWindow = (repositoryPath, launchOptions = { repositoryPathProvided: true }) => {
   const identity = getWindowIdentity(repositoryPath, launchOptions);
   const matchingWebContentsId = findMatchingWindowIdentity(identity, windowIdentities);
   const matchingWindow =
@@ -1280,7 +1047,7 @@ const focusOrCreateWindow = (
         );
 
   if (matchingWindow) {
-    if (launchOptions.planFile || launchOptions.walkthrough || launchOptions.walkthroughFile) {
+    if (launchOptions.planFile) {
       windowRepositories.set(matchingWebContentsId, identity?.repositoryRoot || repositoryPath);
       windowLaunchOptions.set(matchingWebContentsId, launchOptions);
       if (launchOptions.planFile) {
@@ -1408,20 +1175,8 @@ if (squirrelStartup || !lock) {
   });
 
   app.on('ready', () => {
-    migrateFromPreferences(app.getPath('userData'), normalizeOpenAIModel);
-    const shouldDetectInitialAgent = !existsSync(getConfigPath());
+    migrateFromPreferences(app.getPath('userData'));
     config = readConfig();
-    config.settings.openAIModel = normalizeOpenAIModel(config.settings.openAIModel);
-    config.settings.opencodeModel = normalizeOpenCodeModel(config.settings.opencodeModel);
-    config.settings.claudeModel = normalizeClaudeModel(config.settings.claudeModel);
-    config.settings.piModel = normalizePiModel(config.settings.piModel);
-    config.settings.agentBackend = shouldDetectInitialAgent
-      ? detectInitialAgentBackend()
-      : normalizeAgentBackend(config.settings.agentBackend);
-    if (shouldDetectInitialAgent) {
-      writeConfig(config);
-    }
-    refreshInstalledAgentFiles();
     nativeTheme.themeSource = config.settings.theme;
     Menu.setApplicationMenu(buildApplicationMenu());
 
@@ -1446,37 +1201,23 @@ if (squirrelStartup || !lock) {
       void updater?.applyLatest().catch(() => {});
     }
 
-    // Model discovery starts a login shell and an agent process. Keep it out
-    // of the initial review's CPU and disk work.
-    setTimeout(() => {
-      if (!quitting && getActiveAgent().id === 'codex') void loadCodexModels();
-    }, 1000).unref();
-
     watchConfig((nextConfig) => {
-      const previousAgent = config.settings.agentBackend;
       config = {
         ...nextConfig,
         settings: {
           ...nextConfig.settings,
-          agentBackend: normalizeAgentBackend(nextConfig.settings.agentBackend),
-          claudeModel: normalizeClaudeModel(nextConfig.settings.claudeModel),
+
           codeFontFamily: normalizeCodeFontFamily(nextConfig.settings.codeFontFamily),
           codeFontSize: normalizeCodeFontSize(nextConfig.settings.codeFontSize),
-          openAIModel: normalizeOpenAIModel(nextConfig.settings.openAIModel),
-          opencodeModel: normalizeOpenCodeModel(nextConfig.settings.opencodeModel),
-          piModel: normalizePiModel(nextConfig.settings.piModel),
         },
       };
       updater?.setUpdatesEnabled(config.settings.checkForUpdates);
-      refreshInstalledAgentFiles();
+
       nativeTheme.themeSource = config.settings.theme;
       sendConfigChanged();
       Menu.setApplicationMenu(buildApplicationMenu());
-      if (previousAgent !== 'codex' && getActiveAgent().id === 'codex') void loadCodexModels();
     });
   });
-
-  app.on('will-quit', () => codexModelDiscoveryAbort.abort());
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1667,189 +1408,14 @@ ipcMain.handle(
   (event) =>
     windowLaunchOptions.get(event.sender.id) || {
       repositoryPathProvided: false,
-      walkthrough: false,
     },
 );
-
-ipcMain.handle('codiff:getAgentSkillStatus', (event) => {
-  const installer = skillInstallerFor(resolveWindowAgent(event.sender.id).id);
-  return installer ? installer.getStatus() : { installed: false, path: '' };
-});
-
-ipcMain.handle('codiff:installAgentSkill', async (event) => {
-  const installer = skillInstallerFor(resolveWindowAgent(event.sender.id).id);
-  if (!installer) {
-    return { installed: false, path: '' };
-  }
-
-  await installer.install(BrowserWindow.fromWebContents(event.sender));
-  return installer.getStatus();
-});
 
 ipcMain.handle('codiff:getTerminalHelperStatus', () => getTerminalHelperStatus());
 
 ipcMain.handle('codiff:installTerminalHelper', async (event) => {
   await installTerminalHelper(BrowserWindow.fromWebContents(event.sender));
   return getTerminalHelperStatus();
-});
-
-ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) => {
-  const launchOptions = windowLaunchOptions.get(event.sender.id);
-  const progressGeneration = (walkthroughProgressGenerations.get(event.sender.id) || 0) + 1;
-  walkthroughProgressGenerations.set(event.sender.id, progressGeneration);
-  const reportProgress = createWalkthroughProgressReporter(
-    event.sender,
-    () => walkthroughProgressGenerations.get(event.sender.id) === progressGeneration,
-  );
-
-  try {
-    const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
-    const state = await readRepositoryStateWithConfig(
-      repositoryPath,
-      source || launchOptions?.source,
-    );
-    const agent = resolveWindowAgent(event.sender.id);
-    const walkthroughFile = launchOptions?.walkthroughFile;
-    if (walkthroughFile) {
-      let contents;
-      let input;
-      try {
-        contents = readFileSync(walkthroughFile, 'utf8');
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          reason: `Could not read walkthrough file: ${detail}`,
-          status: 'unavailable',
-        };
-      }
-
-      const sessionContext = await Promise.resolve(
-        agent.readSessionContext(launchOptions?.[agent.sessionLaunchOptionKey]),
-      ).catch(() => null);
-      try {
-        input = JSON.parse(contents);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          reason: `Could not read walkthrough file: ${detail}`,
-          status: 'unavailable',
-        };
-      }
-
-      try {
-        return {
-          status: 'ready',
-          walkthrough: normalizeNarrativeWalkthrough(input, state.files, {
-            agent: agent.id,
-            branch: state.branch,
-            context: sessionContext,
-            generatedAt: state.generatedAt,
-            root: state.root,
-            source: state.source,
-          }),
-        };
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        // The usual cause of an unanchored working-tree walkthrough is that the
-        // changes were committed (or reverted) after it was authored. Surface a
-        // specific explanation when we can determine one.
-        const diagnosis = await diagnoseWalkthroughMismatch({
-          hasFiles: state.files.length > 0,
-          input,
-          repositoryRoot: state.root,
-        }).catch(() => null);
-        return {
-          reason: diagnosis || `Walkthrough file could not be applied to this diff: ${detail}`,
-          status: 'unavailable',
-        };
-      }
-    }
-
-    const walkthroughContext = mergeWalkthroughContexts(
-      launchOptions?.walkthroughContext,
-      await agent.readSessionContext(launchOptions?.[agent.sessionLaunchOptionKey]),
-    );
-    const agentOptions = getAgentOptions(agent);
-    const walkthroughModel = resolveNarrativeWalkthroughModel(
-      state,
-      agent,
-      agentOptions.model,
-      agentOptions.reasoningEffort,
-    );
-    const walkthroughPrompt = config.settings.walkthroughPrompt;
-    const cacheKey = getNarrativeWalkthroughCacheKey(
-      state,
-      agent,
-      walkthroughModel,
-      walkthroughContext,
-      walkthroughPrompt,
-      agentOptions.reasoningEffort,
-    );
-    if (!options?.force) {
-      const cachedWalkthrough = readStoredWalkthrough(cacheKey);
-      if (cachedWalkthrough) {
-        return {
-          status: 'ready',
-          walkthrough: {
-            ...cachedWalkthrough,
-            ...(walkthroughContext ? { context: walkthroughContext } : {}),
-            agent: agent.id,
-            repo: {
-              branch: state.branch,
-              root: state.root,
-            },
-            source: state.source,
-          },
-        };
-      }
-    }
-
-    let generatedModel = walkthroughModel;
-    const onModelFallback = agentOptions.onModelFallback;
-    const result = await readNarrativeWalkthrough(
-      state,
-      agent,
-      {
-        ...agentOptions,
-        model: walkthroughModel,
-        onModelFallback: async (fallbackModel, originalModel) => {
-          generatedModel = fallbackModel;
-          await onModelFallback(fallbackModel, originalModel);
-        },
-        onProgress: reportProgress,
-      },
-      walkthroughContext,
-      walkthroughPrompt,
-      options?.previousWalkthrough,
-    );
-    if (result.status === 'ready') {
-      const generatedCacheKey = getNarrativeWalkthroughCacheKey(
-        state,
-        agent,
-        generatedModel,
-        walkthroughContext,
-        walkthroughPrompt,
-        agentOptions.reasoningEffort,
-      );
-      try {
-        const cacheableWalkthrough = { ...result.walkthrough };
-        delete cacheableWalkthrough.context;
-        writeStoredWalkthrough(generatedCacheKey, cacheableWalkthrough);
-      } catch {
-        // Caching is optional; a filesystem failure must not hide a generated result.
-      }
-    }
-    return result;
-  } catch (error) {
-    return {
-      reason: error instanceof Error ? error.message : String(error),
-      status: 'unavailable',
-    };
-  }
-});
-
-ipcMain.handle('codiff:shareWalkthrough', async (event, snapshot) => {
-  return shareSnapshot(getWalkthroughShareContext(event.sender.id), snapshot);
 });
 
 ipcMain.handle('codiff:sharePlan', async (event, review) => {
@@ -1864,63 +1430,36 @@ ipcMain.handle('codiff:sharePlan', async (event, review) => {
     { kind: 'plan', path: launchOptions.planFile },
     getMarkdownDocumentContext(event.sender.id),
   );
-  const agent = resolveWindowAgent(event.sender.id);
-  const sessionId = launchOptions[agent.sessionLaunchOptionKey];
   return shareSnapshot(
     getPlanShareContext(event.sender.id),
     createSharedPlanSnapshot({
-      agent: agent.id,
       codiffVersion: app.getVersion(),
       content: document.content,
       filePath: launchOptions.planFile,
       review,
-      sessionId,
       theme: config.settings.theme,
     }),
   );
 });
 
 ipcMain.handle('codiff:getFeatureFlags', async (event) => {
-  const sharing = Boolean((await getWalkthroughShareContext(event.sender.id)).target);
+  const sharing = Boolean((await getPlanShareContext(event.sender.id)).target);
   return {
     planSharing: sharing,
-    walkthroughSharing: windowLaunchOptions.get(event.sender.id)?.planFile ? false : sharing,
   };
 });
 
-ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
+ipcMain.handle('codiff:createCommit', async (event, request) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
-  const launchOptions = windowLaunchOptions.get(event.sender.id);
-  const state = await readRepositoryStateWithConfig(
-    repositoryPath,
-    request?.source || launchOptions?.source,
-  );
-  const agent = resolveWindowAgent(event.sender.id);
-  return readReviewAssistantReply(state, request, agent, getAgentOptions(agent));
-});
-
-ipcMain.handle('codiff:createWalkthroughCommit', async (event, request) => {
-  const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
-  const result = await createWalkthroughCommit(repositoryPath, request, (chunk) => {
+  const result = await createCommit(repositoryPath, request, (chunk) => {
     if (!event.sender.isDestroyed()) {
-      event.sender.send('codiff:walkthroughCommitOutput', chunk);
+      event.sender.send('codiff:commitOutput', chunk);
     }
   });
   if (result.status === 'committed') {
     await resetRepositoryWatcher(event.sender.id, repositoryPath);
   }
   return result;
-});
-
-ipcMain.handle('codiff:updateWalkthroughCommitMessage', async (event, request) => {
-  const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
-  const launchOptions = windowLaunchOptions.get(event.sender.id);
-  const state = await readRepositoryStateWithConfig(
-    repositoryPath,
-    request?.source || launchOptions?.source,
-  );
-  const agent = resolveWindowAgent(event.sender.id);
-  return readCommitMessageReply(state, request, agent, getAgentOptions(agent));
 });
 
 ipcMain.handle('codiff:submitPullRequestComment', async (event, request) => {

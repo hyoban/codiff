@@ -3,14 +3,10 @@ import type { ReactNode } from 'react';
 import type {
   ChangedFile,
   DiffSection,
-  NarrativeWalkthrough,
-  NarrativeWalkthroughResult,
   PullRequestCodeQualityFinding,
   PullRequestExistingReviewComment,
   ReviewSource,
 } from '../types.ts';
-
-export type WalkthroughError = Extract<NarrativeWalkthroughResult, { status: 'unavailable' }>;
 
 export type ReviewCommentAnnotationMetadata = {
   commentIds: ReadonlyArray<string>;
@@ -101,11 +97,7 @@ export type ReviewComment = {
   canEdit?: boolean;
   canReplyThread?: boolean;
   canResolveThread?: boolean;
-  codexReply?: {
-    body?: string;
-    error?: string;
-    status: 'error' | 'loading' | 'ready';
-  };
+
   filePath: string;
   id: string;
   isOutdated?: boolean;
@@ -125,34 +117,17 @@ export type ReviewComment = {
   url?: string;
 };
 
-export type SidebarMode = 'tree' | 'walkthrough' | 'history';
+export type SidebarMode = 'tree' | 'history';
 
 export type PullRequestSource = Extract<ReviewSource, { type: 'pull-request' }>;
-
-export type WalkthroughNote = {
-  action: 'review' | 'scan' | 'skim';
-  context: string;
-  groupReason: string;
-  groupTitle: string;
-  impact: 'wide' | 'contained' | 'mechanical';
-  order: number;
-  reason: string;
-};
 
 export type SourceSession = {
   collapsed: Set<string>;
   expandedReviewKeys: Set<string>;
-  /** Populated by a generated or pre-authored narrative walkthrough document. */
-  narrativeWalkthrough?: NarrativeWalkthrough | null;
+
   reviewComments: ReadonlyArray<ReviewComment>;
   selectedPath: string | null;
   viewed: Record<string, string>;
-  walkthroughError: WalkthroughError | null;
-  walkthroughFiles: ReadonlyArray<{
-    fingerprint: string;
-    path: string;
-    status: ChangedFile['status'];
-  }>;
 };
 
 export type RepositoryLoadError = {
@@ -171,8 +146,8 @@ export type CodeViewItemMetadata = {
   isSelected: boolean;
   isViewed: boolean;
   lineCount: DiffLineCount;
+  note?: string;
   reviewIdentity: ReviewIdentity;
   section: DiffSection;
   sectionCount: number;
-  walkthroughNote?: WalkthroughNote;
 };

@@ -4,7 +4,6 @@ import type {
   ShareCommentMessageRow,
   ShareCommentThreadRow,
   UploadIntentRow,
-  WalkthroughRow,
 } from './schema.ts';
 
 export const uploadIntentSecretHeader = 'x-codiff-upload-secret';
@@ -156,43 +155,7 @@ export type ShareCommentThread = Entity<
   }
 >;
 
-export const walkthroughDataView = dataView<WalkthroughRow>('Walkthrough')({
-  branch: true,
-  byteSize: true,
-  canDelete: canManageShare<WalkthroughRow>(),
-  canResolveComments: canManageShare<WalkthroughRow>(),
-  codiffVersion: true,
-  commentThreads: list(shareCommentThreadDataView, {
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-  }),
-  createdAt: true,
-  description: true,
-  id: true,
-  pullRequestNumber: true,
-  pullRequestTitle: true,
-  pullRequestUrl: true,
-  repositoryHost: true,
-  repositoryName: true,
-  repositoryOwner: true,
-  repositoryUrl: true,
-  schemaVersion: true,
-  sha256: true,
-  slug: true,
-  sourceType: true,
-  title: true,
-  updatedAt: true,
-});
-
-export type Walkthrough = Entity<
-  typeof walkthroughDataView,
-  'Walkthrough',
-  {
-    commentThreads: Array<ShareCommentThread>;
-  }
->;
-
 export const planDataView = dataView<PlanRow>('Plan')({
-  agent: true,
   byteSize: true,
   canDelete: canManageShare<PlanRow>(),
   canResolveComments: canManageShare<PlanRow>(),
@@ -265,5 +228,4 @@ export const SharingRoot = {
   planBySlug: planDataView,
   sharingStats: shareStatsDataView,
   uploadIntentByCode: uploadIntentDataView,
-  walkthroughBySlug: walkthroughDataView,
 } as const;
