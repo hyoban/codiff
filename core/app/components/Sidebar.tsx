@@ -16,6 +16,7 @@ export function Sidebar({
   commitViewOpen,
   currentSource,
   files,
+  hidden = false,
   historyEntries,
   historyHasMore,
   historyLoading,
@@ -42,6 +43,7 @@ export function Sidebar({
   commitViewOpen: boolean;
   currentSource: ReviewSource;
   files: ReadonlyArray<ChangedFile>;
+  hidden?: boolean;
   historyEntries: ReadonlyArray<HistoryEntry>;
   historyHasMore: boolean;
   historyLoading: boolean;
@@ -71,7 +73,7 @@ export function Sidebar({
     commitFiles.length > 0;
 
   useEffect(() => {
-    if (mode !== 'tree') {
+    if (mode !== 'tree' || hidden) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -84,7 +86,7 @@ export function Sidebar({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [keymap, mode]);
+  }, [hidden, keymap, mode]);
 
   return (
     <>

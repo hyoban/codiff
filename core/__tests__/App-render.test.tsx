@@ -447,9 +447,9 @@ test('stale persisted collapsed sidebar state does not hide the sidebar on launc
   expect(app.container.querySelector('.sidebar [role="tablist"]')).toBeNull();
   const sidebarToggle = topBar?.querySelector<HTMLButtonElement>('.sidebar-toggle-button');
   await act(async () => sidebarToggle?.click());
-  expect(app.container.querySelector('.app-shell')?.classList.contains('sidebar-collapsed')).toBe(
-    true,
-  );
+  expect(app.container.querySelector<HTMLElement>('.history-sidebar')?.hidden).toBe(true);
+  expect(app.container.querySelector<HTMLElement>('.files-sidebar')?.hidden).toBe(true);
+  expect(app.container.querySelector<HTMLElement>('.review')?.hidden).toBe(false);
   expect(app.container.querySelector('.review-top-bar')).toBe(topBar);
 });
 
@@ -2917,4 +2917,75 @@ test('history filter matches commits by author name', async () => {
     expect(historySubjects()).toContain('Update docs');
     expect(historySubjects()).not.toContain('Fix parser');
   });
+});
+
+test('panels close independently, remain reopenable, and remember visibility across launches', async () => {
+  window.codiff = createCodiffMock();
+  {
+    await using app = await renderReact(<App />);
+    const panel = (name: string) =>
+      app.container.querySelector<HTMLElement>(`#review-panel-${name}`)!;
+    const toggle = async (name: string) => {
+      await act(async () =>
+        app.container
+          .querySelector<HTMLButtonElement>(
+            `.panel-visibility-controls [aria-controls="review-panel-${name}"]`,
+          )!
+          .click(),
+      );
+    };
+    await waitFor(() => expect(panel('history')).not.toBeNull());
+    await toggle('history');
+    expect(panel('history').hidden).toBe(true);
+    expect(panel('files').hidden).toBe(false);
+    expect(panel('diff').hidden).toBe(false);
+    await toggle('files');
+    expect(panel('files').hidden).toBe(true);
+    expect(panel('diff').hidden).toBe(false);
+    await toggle('diff');
+    expect(panel('diff').hidden).toBe(true);
+    expect(app.container.querySelector('.panels-empty')).not.toBeNull();
+    expect(
+      app.container.querySelectorAll('.panel-visibility-controls [aria-pressed="false"]'),
+    ).toHaveLength(3);
+    await toggle('history');
+    expect(panel('history').hidden).toBe(false);
+    expect(panel('files').hidden).toBe(true);
+    expect(panel('diff').hidden).toBe(true);
+    expect(app.container.querySelector('.panels-empty')).toBeNull();
+  }
+  await using restored = await renderReact(<App />);
+  await waitFor(() =>
+    expect(restored.container.querySelector('#review-panel-history')).not.toBeNull(),
+  );
+  expect(restored.container.querySelector<HTMLElement>('#review-panel-history')?.hidden).toBe(
+    false,
+  );
+  expect(restored.container.querySelector<HTMLElement>('#review-panel-files')?.hidden).toBe(true);
+  expect(restored.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(true);
+  await act(async () =>
+    restored.container.querySelector<HTMLButtonElement>('[aria-label="Show diff panel"]')!.click(),
+  );
+  expect(restored.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(false);
+});
+
+test('file and diff search shortcuts reopen only their target panels', async () => {
+  window.localStorage.setItem(
+    'codiff:panel-visibility',
+    JSON.stringify({ diff: false, files: false, history: true }),
+  );
+  window.codiff = createCodiffMock();
+  await using app = await renderReact(<App />);
+  await waitFor(() => expect(app.container.querySelector('#review-panel-history')).not.toBeNull());
+  await act(async () => dispatchModifiedKey('p'));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      app.container.querySelector('.files-sidebar .sidebar-search'),
+    ),
+  );
+  expect(app.container.querySelector<HTMLElement>('#review-panel-files')?.hidden).toBe(false);
+  expect(app.container.querySelector<HTMLElement>('#review-panel-history')?.hidden).toBe(false);
+  expect(app.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(true);
+  await act(async () => dispatchModifiedKey('f'));
+  expect(app.container.querySelector<HTMLElement>('#review-panel-diff')?.hidden).toBe(false);
 });

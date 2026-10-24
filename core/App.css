@@ -1066,8 +1066,52 @@ a.review-top-bar-source:focus-visible {
   grid-column: 5;
 }
 
-.app-shell.three-column.sidebar-collapsed > .review {
-  grid-column: 1;
+.app-shell.three-column > [hidden] {
+  display: none;
+}
+
+.panels-empty {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.three-column .review-top-bar-center {
+  display: flex;
+  pointer-events: auto;
+}
+
+.panel-visibility-controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+}
+
+.panel-visibility-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 600 11px/1.2 var(--font-sans);
+}
+
+.panel-visibility-controls button[aria-pressed='true'],
+.panel-visibility-controls button:hover {
+  background: var(--hover-wash);
+  color: var(--sidebar-text);
+}
+
+@media (max-width: 720px) {
+  .panel-visibility-controls button span {
+    display: none;
+  }
 }
 
 .sidebar-panel-title {

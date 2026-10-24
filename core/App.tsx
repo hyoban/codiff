@@ -16,6 +16,7 @@ import {
   RepositoryLoadErrorPanel,
   ReviewSourceLoading,
 } from './app/components/Panels.tsx';
+import { PanelVisibilityControls } from './app/components/PanelVisibilityControls.tsx';
 import { preloadReviewMarkdown, ReviewCodeView } from './app/components/ReviewCodeView.tsx';
 import { ReviewTopBar } from './app/components/ReviewTopBar.tsx';
 import { Sidebar } from './app/components/Sidebar.tsx';
@@ -57,6 +58,12 @@ import {
   shouldPreloadSectionContentsForSearch,
 } from './lib/diff.ts';
 import { sortFiles, splitRepositoryPath } from './lib/files.ts';
+import {
+  getPanelColumns,
+  readPanelVisibility,
+  writePanelVisibility,
+  type ReviewPanel,
+} from './lib/panel-layout.ts';
 import {
   consumeReloadSelection,
   getChangedPaths,
@@ -207,7 +214,15 @@ export default function App({
   const [openReviewSourceKind, setOpenReviewSourceKind] = useState<OpenReviewSourceKind | null>(
     null,
   );
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [visiblePanels, setVisiblePanels] = useState(readPanelVisibility);
+  const sidebarCollapsed = !visiblePanels.history && !visiblePanels.files;
+  useEffect(() => writePanelVisibility(visiblePanels), [visiblePanels]);
+  const setPanelVisible = useCallback((panel: ReviewPanel, visible: boolean) => {
+    setVisiblePanels((current) => ({ ...current, [panel]: visible }));
+  }, []);
+  const togglePanel = useCallback((panel: ReviewPanel) => {
+    setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }));
+  }, []);
   const [state, setState] = useState<RepositoryState | null>(null);
   const [terminalHelperInstalling, setTerminalHelperInstalling] = useState(false);
   const [terminalHelperStatus, setTerminalHelperStatus] = useState<TerminalHelperStatus>(
@@ -284,8 +299,11 @@ export default function App({
     stateRef,
   });
   const collapseSidebar = useCallback(() => {
-    setSidebarCollapsed(true);
-  }, []);
+    setPanelVisible('files', false);
+  }, [setPanelVisible]);
+  const collapseHistory = useCallback(() => {
+    setPanelVisible('history', false);
+  }, [setPanelVisible]);
   const { resizeSidebar, sidebarWidth } = useResizableSidebar({
     collapseThreshold: SIDEBAR_COLLAPSE_THRESHOLD,
     onCollapse: collapseSidebar,
@@ -295,6 +313,8 @@ export default function App({
     readWidth: readSidebarWidth,
   });
   const { resizeSidebar: resizeHistory, sidebarWidth: historyWidth } = useResizableSidebar({
+    collapseThreshold: SIDEBAR_COLLAPSE_THRESHOLD,
+    onCollapse: collapseHistory,
     onWidthCommit: writeHistoryWidth,
     panelSelector: '.history-sidebar',
     position: preferences.sidebarPosition,
@@ -327,7 +347,7 @@ export default function App({
     matches: diffSearchMatches,
     matchPathSet: diffSearchMatchPathSet,
     moveMatch: moveDiffSearchMatch,
-    openSearch: openDiffSearch,
+    openSearch: openDiffSearchPanel,
     query: diffSearchQuery,
     resetSearch: resetDiffSearch,
     updateQuery: updateDiffSearchQuery,
@@ -338,6 +358,11 @@ export default function App({
     fileSearchQuery,
     showWhitespace,
   });
+
+  const openDiffSearch = useCallback(() => {
+    setPanelVisible('diff', true);
+    openDiffSearchPanel();
+  }, [openDiffSearchPanel, setPanelVisible]);
 
   const navigateHunks = useCallback((direction: 1 | -1) => {
     setHunkNavigation((current) => ({
@@ -1072,7 +1097,10 @@ export default function App({
     [reviewComments, showOutdated],
   );
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => !current);
+    setVisiblePanels((current) => {
+      const visible = !current.history && !current.files;
+      return { ...current, files: visible, history: visible };
+    });
   }, []);
 
   const toggleWordWrap = useCallback(() => {
@@ -1080,8 +1108,8 @@ export default function App({
   }, []);
 
   const expandSidebar = useCallback(() => {
-    setSidebarCollapsed(false);
-  }, []);
+    setPanelVisible('files', true);
+  }, [setPanelVisible]);
 
   const focusFileFilter = useCallback(() => {
     expandSidebar();
@@ -1132,7 +1160,7 @@ export default function App({
     onToggleWordWrap: toggleWordWrap,
     shouldDeferHunkNavigation: () => false,
 
-    sidebarCollapsed,
+    sidebarCollapsed: !visiblePanels.files,
   });
 
   useEffect(() => window.codiff.onFindInDiffs(openDiffSearch), [openDiffSearch]);
@@ -1171,11 +1199,12 @@ export default function App({
 
   const activatePath = useCallback(
     (path: string) => {
+      setPanelVisible('diff', true);
       setMainMode('review');
       setSelectedPath(path);
       scrollPathIntoReview(path, 'smooth');
     },
-    [scrollPathIntoReview, setMainMode, setSelectedPath],
+    [scrollPathIntoReview, setMainMode, setPanelVisible, setSelectedPath],
   );
 
   // Refresh the repository state in place after the working tree changed.
@@ -1405,7 +1434,7 @@ export default function App({
 
   const changeSidebarMode = useCallback(
     (panel: 'tree' | 'history') => {
-      setSidebarCollapsed(false);
+      setPanelVisible(panel === 'tree' ? 'files' : 'history', true);
       setMainMode('review');
       requestAnimationFrame(() => {
         const input = document.querySelector<HTMLInputElement>(
@@ -1415,7 +1444,7 @@ export default function App({
         input?.select();
       });
     },
-    [setMainMode],
+    [setMainMode, setPanelVisible],
   );
 
   const commandBarCommands = useAppCommands({
@@ -1637,20 +1666,18 @@ export default function App({
 
   return (
     <div
-      className={`app-shell three-column${sidebarCollapsed ? ' sidebar-collapsed' : ''}${
+      className={`app-shell three-column${
         commandBarVisible ? ' command-bar-open' : ''
       }${isWindowFullScreen ? ' window-fullscreen' : ''}`}
       data-sidebar-position={preferences.sidebarPosition}
-      style={
-        sidebarCollapsed
-          ? undefined
-          : {
-              gridTemplateColumns:
-                preferences.sidebarPosition === 'right'
-                  ? `minmax(0, 1fr) 0 min(${sidebarWidth}px, 30vw) 0 min(${historyWidth}px, 30vw)`
-                  : `min(${historyWidth}px, 30vw) 0 min(${sidebarWidth}px, 30vw) 0 minmax(0, 1fr)`,
-            }
-      }
+      style={{
+        gridTemplateColumns: getPanelColumns(
+          visiblePanels,
+          historyWidth,
+          sidebarWidth,
+          preferences.sidebarPosition,
+        ),
+      }}
     >
       <div aria-hidden className="window-drag-region" />
       <ReviewTopBar
@@ -1662,6 +1689,7 @@ export default function App({
             showWhitespace={showWhitespace}
           />
         }
+        center={<PanelVisibilityControls onToggle={togglePanel} visible={visiblePanels} />}
         context={
           <>
             {state.branch ? (
@@ -1748,6 +1776,8 @@ export default function App({
           <aside
             aria-label={mode === 'history' ? 'Commit history' : 'Changed files'}
             className={`squircle sidebar ${mode === 'history' ? 'history' : 'files'}-sidebar`}
+            hidden={!visiblePanels[mode === 'history' ? 'history' : 'files']}
+            id={`review-panel-${mode === 'history' ? 'history' : 'files'}`}
           >
             <Sidebar
               branchSource={
@@ -1768,6 +1798,7 @@ export default function App({
               commitViewOpen={showCommitView}
               currentSource={pendingSource ?? state.source}
               files={visibleFiles}
+              hidden={!visiblePanels[mode === 'history' ? 'history' : 'files']}
               historyEntries={historyEntries}
               historyHasMore={historyHasMore}
               historyLoading={historyLoading}
@@ -1779,7 +1810,10 @@ export default function App({
               onSearchQueryChange={mode === 'history' ? setHistorySearchQuery : setFileSearchQuery}
               onSelectSource={selectSource}
 
-              onToggleCommitView={showCommitView ? closeCommitView : openCommitView}
+              onToggleCommitView={() => {
+                setPanelVisible('diff', true);
+                (showCommitView ? closeCommitView : openCommitView)();
+              }}
               pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
               reloadDeltaPaths={reloadDeltaPaths}
               searchQuery={mode === 'history' ? historySearchQuery : fileSearchQuery}
@@ -1793,11 +1827,16 @@ export default function App({
           <div
             aria-hidden
             className={`sidebar-resizer ${mode === 'history' ? 'history' : 'files'}-resizer`}
+            hidden={
+              mode === 'history'
+                ? !visiblePanels.history || (!visiblePanels.files && !visiblePanels.diff)
+                : !visiblePanels.files || !visiblePanels.diff
+            }
             onPointerDown={mode === 'history' ? resizeHistory : resizeSidebar}
           />
         </Fragment>
       ))}
-      <main className="review">
+      <main className="review" hidden={!visiblePanels.diff} id="review-panel-diff">
         {isSwitchingSource ? (
           <ReviewSourceLoading />
         ) : showCommitView ? (
@@ -1842,6 +1881,14 @@ export default function App({
           />
         )}
       </main>
+      {!visiblePanels.history && !visiblePanels.files && !visiblePanels.diff ? (
+        <div className="empty-state panels-empty">
+          <div className="empty-panel squircle">
+            <strong>All panels are closed</strong>
+            <span>Use History, Files, or Diff above to reopen a panel.</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
