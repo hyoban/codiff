@@ -173,6 +173,8 @@ Use `Mod` for <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on other platforms. Sh
 combine `Mod`, `Ctrl`, `Alt`, `Shift`, or `Meta` with a key, for example `Mod+k` or
 `Alt+Enter`.
 
+This fork has no built-in updater. Update by rebuilding from this fork.
+
 ## Development
 
 Use Node.js 24.21.0 or later.

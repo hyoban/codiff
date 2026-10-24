@@ -33,7 +33,13 @@ test.each(['darwin', 'linux', 'win32'])(
         'Install Terminal Helper',
       ]),
     );
-    for (const label of ['Agent', 'Model', 'Reasoning Effort', 'Install Skill']) {
+    for (const label of [
+      'Agent',
+      'Model',
+      'Reasoning Effort',
+      'Install Skill',
+      'Check for Updates…',
+    ]) {
       expect(labels).not.toContain(label);
     }
     expect(items.some(({ role }) => role === 'quit')).toBe(true);

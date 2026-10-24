@@ -2,8 +2,6 @@ export type CodiffDiffStyle = 'split' | 'unified';
 export type CodiffTheme = 'system' | 'light' | 'dark';
 
 export type CodiffSettings = {
-  checkForUpdates: boolean;
-
   codeFontFamily: string;
   codeFontSize: number;
   copyCommentsOnClose: boolean;

@@ -5,7 +5,6 @@ import type {
   CodiffLaunchOptions,
   CodiffMarkdownDocument,
   CodiffPreferences,
-  CodiffUpdateStatus,
   DefinitionSearchRequest,
   DefinitionSearchResult,
   DiffImageContentRequest,
@@ -38,12 +37,10 @@ declare module '*.css';
 declare global {
   interface Window {
     codiff: {
-      applyUpdate: () => Promise<CodiffUpdateStatus>;
-
       completePlan: (review: PlanReview, status: PlanHandoffStatus) => Promise<void>;
       createCommit: (request: CommitRequest) => Promise<CommitResult>;
       decreaseCodeFontSize: () => Promise<void>;
-      dismissUpdate: () => Promise<CodiffUpdateStatus>;
+
       findDefinitions: (request: DefinitionSearchRequest) => Promise<DefinitionSearchResult>;
 
       getConfig: () => Promise<CodiffConfig>;
@@ -64,7 +61,7 @@ declare global {
       getRepositoryHistory: (limit?: number, source?: ReviewSource) => Promise<RepositoryHistory>;
       getRepositoryState: (source?: ReviewSource) => Promise<RepositoryState>;
       getTerminalHelperStatus: () => Promise<TerminalHelperStatus>;
-      getUpdateStatus: () => Promise<CodiffUpdateStatus>;
+
       increaseCodeFontSize: () => Promise<void>;
 
       installTerminalHelper: () => Promise<TerminalHelperStatus>;
@@ -87,12 +84,11 @@ declare global {
       onPlanCloseRequested: (callback: () => void) => () => void;
       onRefreshRequest: (callback: () => void) => () => void;
       onRepositoryChanged: (callback: (change: { root: string }) => void) => () => void;
-      onUpdateStatusChanged: (callback: (status: CodiffUpdateStatus) => void) => () => void;
 
       onWindowFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
       openConfigFile: () => Promise<void>;
       openFile: (path: string, lineNumber?: number) => Promise<void>;
-      openReleasePage: () => Promise<void>;
+
       openRepositoryFolder: () => Promise<void>;
       resetCodeFontSize: () => Promise<void>;
       resolvePullRequestUrl: (value: string) => Promise<string>;

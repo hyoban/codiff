@@ -272,11 +272,6 @@ const mergeConfig = (raw) => {
           : defaults.keymap.toggleWordWrap,
     },
     settings: {
-      checkForUpdates:
-        typeof rawSettings.checkForUpdates === 'boolean'
-          ? rawSettings.checkForUpdates
-          : defaults.settings.checkForUpdates,
-
       codeFontFamily: normalizeCodeFontFamily(rawSettings.codeFontFamily),
       codeFontSize: normalizeCodeFontSize(rawSettings.codeFontSize),
       copyCommentsOnClose:

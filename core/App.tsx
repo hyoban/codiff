@@ -17,7 +17,6 @@ import {
   RepositoryChangeBanner,
   RepositoryLoadErrorPanel,
   ReviewSourceLoading,
-  UpdatePill,
 } from './app/components/Panels.tsx';
 import { preloadReviewMarkdown, ReviewCodeView } from './app/components/ReviewCodeView.tsx';
 import type { ReviewModeItem } from './app/components/ReviewModeControl.tsx';
@@ -102,7 +101,6 @@ import type {
   CodiffLaunchOptions,
   CodiffMarkdownDocument,
   CodiffPreferences,
-  CodiffUpdateStatus,
   DefinitionCandidate,
   GitIdentity,
   HistoryEntry,
@@ -187,7 +185,7 @@ export default function App({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySource, setHistorySource] = useState<ReviewSource | null>(null);
   const [localChangesDetected, setLocalChangesDetected] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<CodiffUpdateStatus | null>(null);
+
   const [launchOptions, setLaunchOptions] = useState<CodiffLaunchOptions>(
     initialLaunchOptions ?? defaultLaunchOptions,
   );
@@ -734,25 +732,6 @@ export default function App({
     setSidebarMode,
     setViewed,
   ]);
-
-  useEffect(() => {
-    let canceled = false;
-
-    window.codiff
-      .getUpdateStatus()
-      .then((status) => {
-        if (!canceled) {
-          setUpdateStatus(status);
-        }
-      })
-      .catch(() => {});
-
-    const unsubscribe = window.codiff.onUpdateStatusChanged(setUpdateStatus);
-    return () => {
-      canceled = true;
-      unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     let canceled = false;
@@ -1812,17 +1791,6 @@ export default function App({
           summaryLoading={isSwitchingSource}
           viewed={viewed}
         />
-        {updateStatus ? (
-          <UpdatePill
-            onApply={() => {
-              window.codiff.applyUpdate().then(setUpdateStatus, () => {});
-            }}
-            onDismiss={() => {
-              window.codiff.dismissUpdate().then(setUpdateStatus, () => {});
-            }}
-            status={updateStatus}
-          />
-        ) : null}
       </aside>
       <div aria-hidden className="sidebar-resizer" onPointerDown={resizeSidebar} />
       <main className="review">

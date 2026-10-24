@@ -111,9 +111,6 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     allowPositionals: true,
     args,
     options: {
-      'apply-update': {
-        type: 'boolean',
-      },
       commit: {
         type: 'string',
       },
@@ -253,8 +250,6 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   );
   return {
     launchOptions: {
-      ...(values['apply-update'] === true ? { applyUpdate: true } : {}),
-
       ...(planFilePath ? { planFile: resolve(planFilePath) } : {}),
       ...(planResultFilePath ? { planResultFile: resolve(planResultFilePath) } : {}),
       repositoryPathProvided,

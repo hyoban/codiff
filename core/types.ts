@@ -372,8 +372,6 @@ export type ShareResult =
 export type SharePlanResult = ShareResult;
 
 export type CodiffLaunchOptions = {
-  applyUpdate?: boolean;
-
   /** Exact Markdown file opened by the blocking plan handoff. */
   planFile?: string;
   /** Result file used to resume the waiting CLI process. */
@@ -536,16 +534,6 @@ export type ReviewPreferences = Pick<
   CodiffPreferences,
   'codeFontFamily' | 'codeFontSize' | 'diffStyle' | 'showWhitespace' | 'theme' | 'wordWrap'
 >;
-
-export type CodiffUpdatePhase = 'available' | 'error' | 'idle' | 'installerReady' | 'updating';
-
-export type CodiffUpdateStatus = {
-  currentVersion: string;
-  message?: string;
-  phase: CodiffUpdatePhase;
-  strategy?: 'download' | 'manual' | 'squirrel';
-  version?: string;
-};
 
 export type PullRequestReviewComment = {
   anchor?: 'file' | 'line';

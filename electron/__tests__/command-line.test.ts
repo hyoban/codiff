@@ -18,8 +18,6 @@ const { getCommandLineLaunchOptions, getCommandLineRepositoryPath, getInitialRep
       commandLine: ReadonlyArray<string>,
       fallbackPath?: string,
     ) => {
-      applyUpdate?: boolean;
-
       planFile?: string;
       planResultFile?: string;
       repositoryPathProvided: boolean;
@@ -65,11 +63,6 @@ const git = async (repo: string, args: ReadonlyArray<string>) => {
 const defaultLaunchOptions = {
   repositoryPathProvided: false,
 };
-
-test('parses the apply-update launch flag', () => {
-  expect(getCommandLineLaunchOptions(['codiff', '--apply-update']).applyUpdate).toBe(true);
-  expect(getCommandLineLaunchOptions(['codiff', '/repo']).applyUpdate).toBeUndefined();
-});
 
 test('plan command lines do not inspect Git refs', { concurrent: false }, async () => {
   await using directory = await createTemporaryDirectory('codiff-plan-command-line-');

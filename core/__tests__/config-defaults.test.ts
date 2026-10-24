@@ -52,6 +52,14 @@ test('electron and renderer defaults match', () => {
   expect(createElectronDefaultConfig()).toEqual(createDefaultConfig());
 });
 
+test('ignores the removed update preference from an old configuration', () => {
+  const config = readElectronConfig({
+    settings: { checkForUpdates: true, renderMarkdownAs: 'source' },
+  });
+  expect(config.settings).not.toHaveProperty('checkForUpdates');
+  expect(config.settings.renderMarkdownAs).toBe('source');
+});
+
 test('electron config normalizes code font settings', () => {
   expect(readElectronConfig({}).settings.codeFontFamily).toBe('');
   expect(readElectronConfig({}).settings.codeFontSize).toBe(13);

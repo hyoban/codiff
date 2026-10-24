@@ -33,9 +33,6 @@ if (document.documentElement) {
 
 /** @type {Window['codiff']} */
 const codiff = {
-  applyUpdate: () => ipcRenderer.invoke('codiff:applyUpdate'),
-
-  dismissUpdate: () => ipcRenderer.invoke('codiff:dismissUpdate'),
   createCommit: (request) => ipcRenderer.invoke('codiff:createCommit', request),
   completePlan: (review, status) => ipcRenderer.invoke('codiff:completePlan', review, status),
 
@@ -65,7 +62,6 @@ const codiff = {
       : ipcRenderer.invoke('codiff:getRepositoryState', source);
   },
   getTerminalHelperStatus: () => ipcRenderer.invoke('codiff:getTerminalHelperStatus'),
-  getUpdateStatus: () => ipcRenderer.invoke('codiff:getUpdateStatus'),
 
   installTerminalHelper: () => ipcRenderer.invoke('codiff:installTerminalHelper'),
   increaseCodeFontSize: () => ipcRenderer.invoke('codiff:increaseCodeFontSize'),
@@ -148,15 +144,10 @@ const codiff = {
     ipcRenderer.on('codiff:refreshRequest', listener);
     return () => ipcRenderer.removeListener('codiff:refreshRequest', listener);
   },
-  onUpdateStatusChanged: (callback) => {
-    /** @param {Electron.IpcRendererEvent} _event @param {import('../core/types.ts').CodiffUpdateStatus} status */
-    const listener = (_event, status) => callback(status);
-    ipcRenderer.on('codiff:updateStatusChanged', listener);
-    return () => ipcRenderer.removeListener('codiff:updateStatusChanged', listener);
-  },
+
   findDefinitions: (request) => ipcRenderer.invoke('codiff:findDefinitions', request),
   openConfigFile: () => ipcRenderer.invoke('codiff:openConfigFile'),
-  openReleasePage: () => ipcRenderer.invoke('codiff:openReleasePage'),
+
   openFile: (path, lineNumber) => ipcRenderer.invoke('codiff:openFile', path, lineNumber),
   openRepositoryFolder: () => ipcRenderer.invoke('codiff:openRepositoryFolder'),
   resolvePullRequestUrl: (value) => ipcRenderer.invoke('codiff:resolvePullRequestUrl', value),

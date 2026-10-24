@@ -12,8 +12,6 @@ import packageJson from '../package.json' with { type: 'json' };
 import { formatHelpText, parseArguments, resolvePullRequestTargetUrl } from './arguments.js';
 import { completionShells, generateCompletionScript } from './completions.js';
 import { waitForPlanResult } from './plan-result.js';
-import { runUpdateCommand } from './update-command.js';
-import { getUpdateNotice } from './update-notice.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -87,30 +85,7 @@ const openExternal = (url) =>
     });
   });
 
-const runCodiffUpdate = () => {
-  const appBundleMatch = process.platform === 'darwin' ? root.match(/^(.*\.app)\//) : null;
-  return runUpdateCommand({
-    currentVersion: packageJson.version,
-    isSourceCheckout: existsSync(resolve(root, '.git')),
-    log: (line) => process.stdout.write(`${line}\n`),
-    openApp: appBundleMatch
-      ? () => {
-          spawn('open', ['-n', appBundleMatch[1], '--args', '--apply-update'], {
-            detached: true,
-            stdio: 'ignore',
-          }).unref();
-        }
-      : null,
-  });
-};
-
 const run = async () => {
-  const rawArguments = process.argv.slice(2);
-  if (rawArguments.length === 1 && rawArguments[0] === 'update') {
-    process.exitCode = await runCodiffUpdate();
-    return;
-  }
-
   const parsedArguments = parseArguments(process.argv.slice(2));
 
   if (parsedArguments.help) {
@@ -120,10 +95,6 @@ const run = async () => {
 
   if (parsedArguments.version) {
     process.stdout.write(`codiff v${packageJson.version}\n`);
-    const notice = getUpdateNotice({ currentVersion: packageJson.version });
-    if (notice) {
-      process.stderr.write(`${notice}\n`);
-    }
     return;
   }
 
@@ -246,11 +217,6 @@ const run = async () => {
   // on boot. Strip it (and the console-detach flag) so the window always opens.
   delete childEnv.ELECTRON_RUN_AS_NODE;
   delete childEnv.ELECTRON_NO_ATTACH_CONSOLE;
-
-  const updateNotice = getUpdateNotice({ currentVersion: packageJson.version });
-  if (updateNotice) {
-    process.stderr.write(`${updateNotice}\n`);
-  }
 
   const { default: electron } = await import('electron');
 

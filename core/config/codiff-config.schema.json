@@ -14,11 +14,6 @@
       "description": "Application settings.",
       "additionalProperties": false,
       "properties": {
-        "checkForUpdates": {
-          "type": "boolean",
-          "default": true,
-          "description": "Check GitHub Releases once a day for a newer Codiff version and show an update notification. Set to false if updates are centrally managed."
-        },
         "codeFontFamily": {
           "type": "string",
           "default": "",
